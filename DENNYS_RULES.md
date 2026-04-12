@@ -2,7 +2,7 @@
 
 *A PhD researcher's operating manual for rigorous, reproducible, and publishable ML research.*
 
-Distilled from the advice of [Karpathy](http://karpathy.github.io/2019/04/25/recipe/), [Schulman](http://joschu.net/blog/opinionated-guide-ml-research.html), [Hinton](https://digitalhabitats.global/blogs/synthetic-minds/geoffrey-hinton-on-working-with-ilya-choosing-problems-and-the-power-of-intuition), [Bengio](https://cifar.ca/cifarnews/2018/08/01/q-a-with-yoshua-bengio/), [LeCun](https://www.youtube.com/watch?v=Umi6Vkv9DNQ), [Ng](https://www.kdnuggets.com/2019/09/advice-building-machine-learning-career-research-papers-andrew-ng.html), [Raschka](https://sebastianraschka.com/blog/2022/confidence-intervals-for-ml.html), [Hamming](https://www.cs.virginia.edu/~robins/YouAndYourResearch.html), and hard-won community wisdom.
+Distilled from the advice of [Karpathy](http://karpathy.github.io/2019/04/25/recipe/), [Schulman](http://joschu.net/blog/opinionated-guide-ml-research.html), [Hinton](https://digitalhabitats.global/blogs/synthetic-minds/geoffrey-hinton-on-working-with-ilya-choosing-problems-and-the-power-of-intuition), [Bengio](https://cifar.ca/cifarnews/2018/08/01/q-a-with-yoshua-bengio/), [LeCun](https://www.youtube.com/watch?v=Umi6Vkv9DNQ), [Ng](https://www.kdnuggets.com/2019/09/advice-building-machine-learning-career-research-papers-andrew-ng.html), [Raschka](https://sebastianraschka.com/blog/2022/confidence-intervals-for-ml.html), [Hamming](https://www.cs.virginia.edu/~robins/YouAndYourResearch.html), [Varoquaux](https://gael-varoquaux.info/about.html), and hard-won community wisdom.
 
 ---
 
@@ -21,40 +21,43 @@ Distilled from the advice of [Karpathy](http://karpathy.github.io/2019/04/25/rec
 ## II. Becoming One with the Data
 
 8. **Spend hours with your data before writing any model code.** Scan thousands of examples. Identify duplicates, corrupted labels, imbalances, biases. Write code to search/filter/sort by any dimension. ([Karpathy](http://karpathy.github.io/2019/04/25/recipe/))
-9. **Visualize everything.** Distributions, outliers, correlations, class balance. If you can't visualize it, you don't understand it.
-10. **Verify data just before it enters the model.** Visualize the exact tensor that goes into `model(x)` -- after all preprocessing, augmentation, and batching. ([Karpathy](http://karpathy.github.io/2019/04/25/recipe/))
+9. **Data quality > model architecture.** Most gains in real-world applications come from better data handling, not fancier models. Invest your time accordingly. ([Varoquaux](https://gael-varoquaux.info/about.html))
+10. **Visualize everything.** Distributions, outliers, correlations, class balance. If you can't visualize it, you don't understand it.
+11. **Verify data just before it enters the model.** Visualize the exact tensor that goes into `model(x)` -- after all preprocessing, augmentation, and batching. ([Karpathy](http://karpathy.github.io/2019/04/25/recipe/))
 
 ---
 
 ## III. Training Neural Networks ([The Karpathy Recipe](http://karpathy.github.io/2019/04/25/recipe/))
 
-11. **Fix your random seed first.** Use `set_seed(seed)` (see `src/utils/seed.py`) to seed Python, NumPy, PyTorch, and CUDA deterministically. Always know which seed produced which result.
-12. **Start with a dumb baseline.** Linear classifier, tiny model, or even random predictions. Establish the floor before building up.
-13. **Verify loss at initialization.** For softmax with C classes, initial loss should be `-log(1/C)`. If it's not, something is already wrong.
-14. **Overfit a single batch first.** If your model can't memorize 2-8 examples to zero loss, you have a bug. Fix it before scaling up.
-15. **Don't be a hero.** Find the most related paper and copy their simplest architecture. Add complexity one thing at a time. ([Karpathy](http://karpathy.github.io/2019/04/25/recipe/))
-16. **Adam is safe.** Start with Adam at `3e-4`. Don't touch learning rate schedules until everything else works. ([Karpathy](http://karpathy.github.io/2019/04/25/recipe/))
-17. **Add one thing at a time.** Never change two things simultaneously. Each modification gets its own run with a clear hypothesis for why it should help.
-18. **Random search over grid search.** Neural nets are very sensitive to some hyperparameters and insensitive to others -- random search finds the sensitive ones faster.
+12. **Fix your random seed first.** Use `set_seed(seed)` (see `src/utils/seed.py`) to seed Python, NumPy, PyTorch, and CUDA deterministically. Always know which seed produced which result.
+13. **Start with a dumb baseline.** Linear classifier, tiny model, or even random predictions. Establish the floor before building up.
+14. **Verify loss at initialization.** For softmax with C classes, initial loss should be `-log(1/C)`. If it's not, something is already wrong.
+15. **Overfit a single batch first.** If your model can't memorize 2-8 examples to zero loss, you have a bug. Fix it before scaling up.
+16. **Don't be a hero.** Find the most related paper and copy their simplest architecture. Add complexity one thing at a time. ([Karpathy](http://karpathy.github.io/2019/04/25/recipe/))
+17. **Adam is safe.** Start with Adam at `3e-4`. Don't touch learning rate schedules until everything else works. ([Karpathy](http://karpathy.github.io/2019/04/25/recipe/))
+18. **Add one thing at a time.** Never change two things simultaneously. Each modification gets its own run with a clear hypothesis for why it should help.
+19. **Random search over grid search.** Neural nets are very sensitive to some hyperparameters and insensitive to others -- random search finds the sensitive ones faster.
 
 ---
 
 ## IV. Reproducibility
 
-19. **Every run is reproducible.** The `set_seed()` function seeds `random`, `numpy`, `torch`, `torch.cuda`, and sets `PYTHONHASHSEED`, `cudnn.deterministic`, and `cudnn.benchmark`. Use `torch.use_deterministic_algorithms(True, warn_only=True)` during development. ([PyTorch Reproducibility Docs](https://pytorch.org/docs/stable/notes/randomness.html))
-20. **Pin everything.** Python version, PyTorch version, CUDA version, every dependency. Use `pyproject.toml` with exact versions + a lockfile. Include a `Dockerfile` for full environment reproducibility.
-21. **Snapshot configs with every run.** Hydra does this automatically -- every run gets a timestamped output directory with the full resolved config saved as YAML.
-22. **Tag every experiment with a git commit.** W&B does this automatically. Never run experiments on uncommitted code.
-23. **Treat raw data as immutable.** `data/raw/` is read-only. All transformations produce outputs in `data/processed/`. Document the pipeline.
-24. **Use the DataLoader reproducibility protocol.** Set `worker_init_fn` and `generator` with seeded values for multi-worker data loading. ([PyTorch Reproducibility Docs](https://pytorch.org/docs/stable/notes/randomness.html))
+20. **Every run is reproducible.** The `set_seed()` function seeds `random`, `numpy`, `torch`, `torch.cuda`, and sets `PYTHONHASHSEED`, `cudnn.deterministic`, and `cudnn.benchmark`. Use `torch.use_deterministic_algorithms(True, warn_only=True)` during development. ([PyTorch Reproducibility Docs](https://pytorch.org/docs/stable/notes/randomness.html))
+21. **Pin everything.** Python version, PyTorch version, CUDA version, every dependency. Use `pyproject.toml` with exact versions + a lockfile. Include a `Dockerfile` for full environment reproducibility.
+22. **Snapshot configs with every run.** Hydra does this automatically -- every run gets a timestamped output directory with the full resolved config saved as YAML.
+23. **Tag every experiment with a git commit.** W&B does this automatically. Never run experiments on uncommitted code.
+24. **Treat raw data as immutable.** `data/raw/` is read-only. All transformations produce outputs in `data/processed/`. Document the pipeline.
+25. **Use the DataLoader reproducibility protocol.** Set `worker_init_fn` and `generator` with seeded values for multi-worker data loading. ([PyTorch Reproducibility Docs](https://pytorch.org/docs/stable/notes/randomness.html))
 
 ---
 
 ## V. Statistical Significance
 
-25. **No claim without evidence.** Every claim of "method A outperforms method B" must be backed by a statistical test or clearly stated as a trend. ([Raschka](https://sebastianraschka.com/blog/2022/confidence-intervals-for-ml.html))
+26. **No claim without evidence.** Every claim of "method A outperforms method B" must be backed by a statistical test or clearly stated as a trend. ([Raschka](https://sebastianraschka.com/blog/2022/confidence-intervals-for-ml.html))
 
-26. **Seed budget tiers:**
+27. **Benchmark honestly.** Most published benchmarks are broken -- cherry-picked datasets, cherry-picked seeds, too few tasks to draw real conclusions. If your method wins by 0.2% on 5 datasets, that is noise, not signal. Use large benchmark suites with proper statistical tests. ([Varoquaux](https://arxiv.org/abs/2207.08815))
+
+28. **Seed budget tiers:**
 
     | Compute Budget | Seeds | What to Report |
     |---|---|---|
@@ -62,25 +65,25 @@ Distilled from the advice of [Karpathy](http://karpathy.github.io/2019/04/25/rec
     | **Medium** (hours/run) | 5 | Mean +/- std, Wilcoxon signed-rank test |
     | **High** (minutes/run) | 10+ | Mean +/- std, Wilcoxon or paired t-test, bootstrap CIs |
 
-27. **Use paired evaluation.** Run your method and the baseline on the *same* seeds. This induces positive correlation, giving tighter confidence intervals at the same compute budget. ([Paired Bootstrap Protocol](https://arxiv.org/abs/2511.19794))
+29. **Use paired evaluation.** Run your method and the baseline on the *same* seeds. This induces positive correlation, giving tighter confidence intervals at the same compute budget. ([Paired Bootstrap Protocol](https://arxiv.org/abs/2511.19794))
 
-28. **Default test: Wilcoxon signed-rank** (non-parametric, paired). Use `scipy.stats.wilcoxon(scores_ours, scores_baseline)`. It does not assume normality. Fall back to paired t-test (`ttest_rel`) if you have reason to assume normality.
+30. **Default test: Wilcoxon signed-rank** (non-parametric, paired). Use `scipy.stats.wilcoxon(scores_ours, scores_baseline)`. It does not assume normality. Fall back to paired t-test (`ttest_rel`) if you have reason to assume normality.
 
-29. **Report it right:**
+31. **Report it right:**
     - Always: mean +/- std (or SEM), number of seeds, which seeds
     - When possible: p-value from paired test, 95% confidence interval
     - Always state: "Error bars represent standard deviation across N random seeds"
     - Use `src/utils/stats.py` for consistent reporting
 
-30. **Ablation studies are mandatory.** Remove each component one at a time. Show what each piece contributes. Report in both directions: removal from full model AND addition to minimal baseline.
+32. **Ablation studies are mandatory.** Remove each component one at a time. Show what each piece contributes. Report in both directions: removal from full model AND addition to minimal baseline.
 
 ---
 
 ## VI. Code Quality and Readability
 
-31. **Compact but readable.** Write the shortest code that a colleague can understand without asking you questions. No clever one-liners that require 5 minutes to parse. No unnecessary abstraction for code used once.
+33. **Compact but readable.** Write the shortest code that a colleague can understand without asking you questions. No clever one-liners that require 5 minutes to parse. No unnecessary abstraction for code used once.
 
-32. **Shape-annotated signatures with `jaxtyping` + `beartype`:**
+34. **Shape-annotated signatures with `jaxtyping` + `beartype`:**
     ```python
     from jaxtyping import Float, Int
     from torch import Tensor
@@ -96,7 +99,7 @@ Distilled from the advice of [Karpathy](http://karpathy.github.io/2019/04/25/rec
     ```
     Every function that touches tensors documents its shapes in the signature. This is your documentation AND your runtime shape-checker.
 
-33. **Google-style docstrings** for all public functions:
+35. **Google-style docstrings** for all public functions:
     ```python
     def train_step(self, batch: dict, lr: float = 1e-4) -> dict:
         """Perform a single training step.
@@ -111,43 +114,43 @@ Distilled from the advice of [Karpathy](http://karpathy.github.io/2019/04/25/rec
         """
     ```
 
-34. **Ruff for everything.** Ruff replaces Black, isort, flake8, pyupgrade in one tool. Run it via pre-commit hooks so nothing unformatted ever gets committed.
+36. **Ruff for everything.** Ruff replaces Black, isort, flake8, pyupgrade in one tool. Run it via pre-commit hooks so nothing unformatted ever gets committed.
 
-35. **Type hints on public interfaces.** Use `mypy` in relaxed mode to start; tighten gradually.
+37. **Type hints on public interfaces.** Use `mypy` in relaxed mode to start; tighten gradually.
 
 ---
 
 ## VII. Documentation
 
-36. **Auto-generate docs with MkDocs + mkdocstrings.** Write Google-style docstrings with shape annotations; MkDocs renders them into a browsable site. Deployed to GitHub Pages with one command.
+38. **Auto-generate docs with MkDocs + mkdocstrings.** Write Google-style docstrings with shape annotations; MkDocs renders them into a browsable site. Deployed to GitHub Pages with one command.
 
-37. **README as the entry point.** Every project README must have:
+39. **README as the entry point.** Every project README must have:
     - One-sentence summary of what this does
     - Key result (table or figure)
     - Installation (copy-pasteable commands)
     - Quick start (train + eval in 2 commands)
     - Citation block (BibTeX)
 
-38. **Notebooks for exploration, scripts for production.** Notebooks are for EDA and visualization. Training, evaluation, and anything that runs on a cluster is a `.py` script with Hydra config.
+40. **Notebooks for exploration, scripts for production.** Notebooks are for EDA and visualization. Training, evaluation, and anything that runs on a cluster is a `.py` script with Hydra config.
     - Notebook naming convention: `01-dl-initial-data-exploration.ipynb` (number, initials, description)
 
 ---
 
 ## VIII. Experiment Workflow
 
-39. **Use Hydra for all configuration.** No hardcoded hyperparameters in Python files. Every tunable value lives in a YAML config. Override from the command line:
+41. **Use Hydra for all configuration.** No hardcoded hyperparameters in Python files. Every tunable value lives in a YAML config. Override from the command line:
     ```bash
     python src/train.py model.lr=1e-3 data.batch_size=64 seed=42
     ```
 
-40. **Use W&B for experiment tracking.** Free for academics. Log hyperparameters, metrics, system stats, git commit, and artifacts. Tag runs with experiment names. Compare runs in the dashboard.
+42. **Use W&B for experiment tracking.** Free for academics. Log hyperparameters, metrics, system stats, git commit, and artifacts. Tag runs with experiment names. Compare runs in the dashboard.
 
-41. **Version-control experiment configs.** Each publishable experiment gets a config in `configs/experiment/`. This is your lab notebook -- a colleague should reproduce your result by running:
+43. **Version-control experiment configs.** Each publishable experiment gets a config in `configs/experiment/`. This is your lab notebook -- a colleague should reproduce your result by running:
     ```bash
     python src/train.py experiment=paper_table1_row3
     ```
 
-42. **Multi-seed launcher.** Use `scripts/run_seeds.sh` to launch the same experiment across N seeds and aggregate results:
+44. **Multi-seed launcher.** Use `scripts/run_seeds.sh` to launch the same experiment across N seeds and aggregate results:
     ```bash
     bash scripts/run_seeds.sh experiment=paper_table1_row3 seeds="42,123,456,789,1337"
     ```
@@ -156,22 +159,22 @@ Distilled from the advice of [Karpathy](http://karpathy.github.io/2019/04/25/rec
 
 ## IX. Publishing at NeurIPS / ICML / ICLR
 
-43. **One paper = one core contribution.** Identify your single key insight before writing. Everything in the paper argues for that one thing. ([Karpathy](http://karpathy.github.io/2016/09/07/phd/))
+45. **One paper = one core contribution.** Identify your single key insight before writing. Everything in the paper argues for that one thing. ([Karpathy](http://karpathy.github.io/2016/09/07/phd/))
 
-44. **Hit the NeurIPS checklist from day one.** Don't treat it as a last-minute checkbox. The [16-item checklist](https://neurips.cc/public/guides/PaperChecklist) (error bars, compute resources, limitations section, broader impact, etc.) should be baked into your workflow from the start.
+46. **Hit the NeurIPS checklist from day one.** Don't treat it as a last-minute checkbox. The [16-item checklist](https://neurips.cc/public/guides/PaperChecklist) (error bars, compute resources, limitations section, broader impact, etc.) should be baked into your workflow from the start.
 
-45. **Internal deadlines:** Have a 5-page draft 2 weeks before the submission deadline. The last 2 weeks are for polishing, not panicking. ([Karpathy](http://karpathy.github.io/2016/09/07/phd/))
+47. **Internal deadlines:** Have a 5-page draft 2 weeks before the submission deadline. The last 2 weeks are for polishing, not panicking. ([Karpathy](http://karpathy.github.io/2016/09/07/phd/))
 
-46. **Separate experiment design from results.** Describe *what* you tested and *why* before showing results. Reviewers want to see your reasoning, not just numbers. ([ICML Best Practices](https://icml.cc/Conferences/2022/BestPractices))
+48. **Separate experiment design from results.** Describe *what* you tested and *why* before showing results. Reviewers want to see your reasoning, not just numbers. ([ICML Best Practices](https://icml.cc/Conferences/2022/BestPractices))
 
-47. **Report everything reviewers will ask for:**
+49. **Report everything reviewers will ask for:**
     - Hyperparameter search ranges AND final values
     - Compute resources (GPU type, memory, total hours)
     - Error bars with the source of variability stated
     - Ablation study
     - Limitations section (honesty will not cause rejection)
 
-48. **Release code that passes the [5-item completeness checklist](https://medium.com/paperswithcode/ml-code-completeness-checklist-e9127b168501):**
+50. **Release code that passes the [5-item completeness checklist](https://medium.com/paperswithcode/ml-code-completeness-checklist-e9127b168501):**
     1. Dependencies pinned (`requirements.txt` or `pyproject.toml`)
     2. Training code with hyperparameters
     3. Evaluation code
@@ -182,26 +185,27 @@ Distilled from the advice of [Karpathy](http://karpathy.github.io/2019/04/25/rec
 
 ## X. Demos and Project Pages
 
-49. **Every paper gets a Gradio demo on HuggingFace Spaces.** A reviewer or reader should be able to try your method in their browser without installing anything. Even a simple demo dramatically increases impact.
+51. **Every paper gets a Gradio demo on HuggingFace Spaces.** A reviewer or reader should be able to try your method in their browser without installing anything. Even a simple demo dramatically increases impact.
 
-50. **Every paper gets a project page.** Use the `project_page/` template (fork of [Academic Project Page Template](https://github.com/eliahuhorwitz/Academic-project-page-template)). Deploy to GitHub Pages. Include: abstract, key figure, results, BibTeX, links to paper/code/demo.
+52. **Every paper gets a project page.** Use the `project_page/` template (fork of [Academic Project Page Template](https://github.com/eliahuhorwitz/Academic-project-page-template)). Deploy to GitHub Pages. Include: abstract, key figure, results, BibTeX, links to paper/code/demo.
 
 ---
 
 ## XI. Research Habits
 
-51. **Keep a research notebook.** Record daily ideas and experiments. Conduct a condensing review every 1-2 weeks. ([Schulman](http://joschu.net/blog/opinionated-guide-ml-research.html))
-52. **Read two papers a week, every week.** Consistency beats cramming. Start with title/abstract/figures/intro/conclusions. ([Ng](https://www.kdnuggets.com/2019/09/advice-building-machine-learning-career-research-papers-andrew-ng.html))
-53. **Reimplement to understand.** If you don't understand an algorithm well enough to code it from scratch, you don't understand it. ([Schulman](http://joschu.net/blog/opinionated-guide-ml-research.html), [Ng](https://www.kdnuggets.com/2019/09/advice-building-machine-learning-career-research-papers-andrew-ng.html))
-54. **Mine PhD theses for literature reviews.** They map active research domains better than any survey paper. ([Schulman](http://joschu.net/blog/opinionated-guide-ml-research.html))
-55. **Ship code publicly.** "Committing to releasing your code will force you to adopt better coding habits." ([Karpathy](http://karpathy.github.io/2016/09/07/phd/))
-56. **Compound interest.** "Knowledge and productivity work like compound interest -- consistent daily effort compounds dramatically." ([Hamming](https://www.cs.virginia.edu/~robins/YouAndYourResearch.html))
+53. **Keep a research notebook.** Record daily ideas and experiments. Conduct a condensing review every 1-2 weeks. ([Schulman](http://joschu.net/blog/opinionated-guide-ml-research.html))
+54. **Read two papers a week, every week.** Consistency beats cramming. Start with title/abstract/figures/intro/conclusions. ([Ng](https://www.kdnuggets.com/2019/09/advice-building-machine-learning-career-research-papers-andrew-ng.html))
+55. **Reimplement to understand.** If you don't understand an algorithm well enough to code it from scratch, you don't understand it. ([Schulman](http://joschu.net/blog/opinionated-guide-ml-research.html), [Ng](https://www.kdnuggets.com/2019/09/advice-building-machine-learning-career-research-papers-andrew-ng.html))
+56. **Mine PhD theses for literature reviews.** They map active research domains better than any survey paper. ([Schulman](http://joschu.net/blog/opinionated-guide-ml-research.html))
+57. **Ship code publicly.** "Committing to releasing your code will force you to adopt better coding habits." ([Karpathy](http://karpathy.github.io/2016/09/07/phd/))
+58. **Open source is a scientific contribution.** Maintaining widely-used research software is real research output, not "just engineering." Every grad student who writes a one-off implementation that nobody else can run wastes the community's time. ([Varoquaux](https://gael-varoquaux.info/about.html))
+59. **Compound interest.** "Knowledge and productivity work like compound interest -- consistent daily effort compounds dramatically." ([Hamming](https://www.cs.virginia.edu/~robins/YouAndYourResearch.html))
 
 ---
 
 ## XII. Debugging Checklist ([Full Stack Deep Learning](https://fullstackdeeplearning.com/spring2021/lecture-7/))
 
-57. **Systematic debugging protocol:**
+60. **Systematic debugging protocol:**
     - [ ] Can the model overfit a single batch?
     - [ ] Is the loss correct at initialization?
     - [ ] Are gradients flowing? (check for NaN/zero gradients)
