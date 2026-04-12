@@ -36,4 +36,4 @@ class ExampleModel(nn.Module):
 
     @beartype
     def forward(self, x: Float[Tensor, "batch features"]) -> Float[Tensor, "batch classes"]:
-        return self.net(x)
+        return self.net(x)  # type: ignore[no-any-return]

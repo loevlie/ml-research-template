@@ -17,6 +17,7 @@ import lightning as L
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig, OmegaConf
+from torch.utils.data import DataLoader
 
 from my_project.data.datamodule import create_dataloaders
 from my_project.models.module import ExampleModel
@@ -152,14 +153,14 @@ def main(cfg: DictConfig) -> float | None:
 
     # Fabric wraps model, optimizer, dataloaders
     model, optimizer = fabric.setup(model, optimizer)
-    train_loader = fabric.setup_dataloaders(loaders.train)
-    val_loader = fabric.setup_dataloaders(loaders.val)
+    train_loader: DataLoader = fabric.setup_dataloaders(loaders.train)  # type: ignore[assignment]
+    val_loader: DataLoader = fabric.setup_dataloaders(loaders.val)  # type: ignore[assignment]
 
     # --- Training loop ---
     best_val_loss = float("inf")
     best_val_acc = 0.0
     patience_counter = 0
-    output_dir = Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
+    output_dir = Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)  # type: ignore[attr-defined]
 
     fabric.print(f"Config:\n{OmegaConf.to_yaml(cfg)}")
     fabric.print(f"Output dir: {output_dir}")
