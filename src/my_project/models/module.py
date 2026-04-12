@@ -6,7 +6,7 @@ signatures with jaxtyping + beartype.
 
 import torch.nn as nn
 from beartype import beartype
-from jaxtyping import Float, Int
+from jaxtyping import Float
 from torch import Tensor
 
 

@@ -73,6 +73,7 @@ select = [
 ]
 ignore = [
     "E501",  # line length (handled by formatter)
+    "F722",  # jaxtyping shape annotations use string syntax ruff doesn't understand
 ]
 
 [tool.ruff.lint.isort]
