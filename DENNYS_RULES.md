@@ -2,7 +2,7 @@
 
 *A PhD researcher's operating manual for rigorous, reproducible, and publishable ML research.*
 
-Distilled from the advice of [Karpathy](http://karpathy.github.io/2019/04/25/recipe/), [Schulman](http://joschu.net/blog/opinionated-guide-ml-research.html), [Hinton](https://digitalhabitats.global/blogs/synthetic-minds/geoffrey-hinton-on-working-with-ilya-choosing-problems-and-the-power-of-intuition), [Bengio](https://cifar.ca/cifarnews/2018/08/01/q-a-with-yoshua-bengio/), [LeCun](https://www.youtube.com/watch?v=Umi6Vkv9DNQ), [Ng](https://www.kdnuggets.com/2019/09/advice-building-machine-learning-career-research-papers-andrew-ng.html), [Raschka](https://sebastianraschka.com/blog/2022/confidence-intervals-for-ml.html), [Hamming](https://www.cs.virginia.edu/~robins/YouAndYourResearch.html), [Varoquaux](https://gael-varoquaux.info/about.html), [Fei-Fei Li](https://www.ted.com/talks/fei_fei_li_how_we_re_teaching_computers_to_understand_pictures), [Gebru](https://doi.org/10.1145/3458723), [Pineau](https://www.cs.mcgill.ca/~jpineau/ReproducibilityChecklist.pdf), and hard-won community wisdom.
+Distilled from the advice of [Karpathy](http://karpathy.github.io/2019/04/25/recipe/), [Schulman](http://joschu.net/blog/opinionated-guide-ml-research.html), [Hinton](https://digitalhabitats.global/blogs/synthetic-minds/geoffrey-hinton-on-working-with-ilya-choosing-problems-and-the-power-of-intuition), [Bengio](https://cifar.ca/cifarnews/2018/08/01/q-a-with-yoshua-bengio/), [LeCun](https://www.youtube.com/watch?v=Umi6Vkv9DNQ), [Ng](https://www.kdnuggets.com/2019/09/advice-building-machine-learning-career-research-papers-andrew-ng.html), [Raschka](https://sebastianraschka.com/blog/2022/confidence-intervals-for-ml.html), [Hamming](https://www.cs.virginia.edu/~robins/YouAndYourResearch.html), [Varoquaux](https://gael-varoquaux.info/about.html), [Fei-Fei Li](https://profiles.stanford.edu/fei-fei-li), [Gebru](https://doi.org/10.1145/3458723), [Pineau](https://www.cs.mcgill.ca/~jpineau/ReproducibilityChecklist.pdf), and hard-won community wisdom.
 
 ---
 
@@ -15,7 +15,7 @@ Distilled from the advice of [Karpathy](http://karpathy.github.io/2019/04/25/rec
 5. **Be ambitious about importance, not difficulty.** A 10x more important problem typically requires only 2-3x more effort. ([Karpathy](http://karpathy.github.io/2016/09/07/phd/))
 6. **Protect thinking time.** Block time each week with no coding, writing, or reading -- just thinking about big questions. ([Bengio](https://cifar.ca/cifarnews/2018/08/01/q-a-with-yoshua-bengio/))
 7. **Trust your intuition, then verify.** "If you don't allow yourself to say things that could be wrong, you're not going to be a researcher." ([Bengio](https://cifar.ca/cifarnews/2018/08/01/q-a-with-yoshua-bengio/))
-8. **The north star is the problem, not the method.** Don't chase the latest technique -- ask what problem in the world your work serves. Sometimes the most impactful contribution is the dataset or benchmark that reframes the question. ([Fei-Fei Li](https://www.ted.com/talks/fei_fei_li_how_we_re_teaching_computers_to_understand_pictures))
+8. **The north star is the problem, not the method.** Don't chase the latest technique -- ask what problem in the world your work serves. Sometimes the most impactful contribution is the dataset or benchmark that reframes the question. ([Fei-Fei Li](https://profiles.stanford.edu/fei-fei-li))
 
 ---
 
