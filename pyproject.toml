@@ -64,16 +64,15 @@ stats = [
 where = ["src"]
 
 # --- uv: PyTorch CUDA/CPU handling ---
+# Docs: https://docs.astral.sh/uv/guides/integration/pytorch/
+# Change cu124 to match your cluster's CUDA version (cu118, cu124, cu126, cu128)
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-cpu", marker = "sys_platform != 'linux'" },
     { index = "pytorch-cu124", marker = "sys_platform == 'linux'" },
 ]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
+torchvision = [
+    { index = "pytorch-cu124", marker = "sys_platform == 'linux'" },
+]
 
 [[tool.uv.index]]
 name = "pytorch-cu124"
