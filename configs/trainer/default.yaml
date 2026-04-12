@@ -1,0 +1,5 @@
+accelerator: auto
+devices: auto
+precision: 32-true
+max_epochs: 100
+patience: 10

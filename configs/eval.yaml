@@ -1,0 +1,10 @@
+# @package _global_
+
+seed: 42
+ckpt_path: ???  # must be provided via CLI
+
+defaults:
+  - _self_
+  - data: default
+  - model: default
+  - trainer: default

@@ -1,0 +1,25 @@
+{
+    "name": "ML Research Dev Container",
+    "build": {
+        "dockerfile": "../Dockerfile"
+    },
+    "runArgs": ["--gpus", "all"],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "charliermarsh.ruff",
+                "ms-toolsai.jupyter"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/bin/python",
+                "[python]": {
+                    "editor.defaultFormatter": "charliermarsh.ruff",
+                    "editor.formatOnSave": true
+                }
+            }
+        }
+    },
+    "postCreateCommand": "pip install -e '.[dev]' && pre-commit install"
+}

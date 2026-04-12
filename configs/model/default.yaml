@@ -1,0 +1,5 @@
+n_features: ${data.n_features}
+hidden_dim: 128
+n_classes: ${data.n_classes}
+lr: 3e-4
+weight_decay: 1e-5

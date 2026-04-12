@@ -1,0 +1,14 @@
+# @package _global_
+
+seed: 42
+deterministic: true
+
+defaults:
+  - _self_
+  - data: default
+  - model: default
+  - trainer: default
+  - logger: wandb
+  - experiment: null
+  - hparams_search: null
+  - local: default

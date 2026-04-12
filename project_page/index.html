@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Paper Title</title>
+    <style>
+        :root { --max-width: 800px; --accent: #2563eb; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1a1a1a; }
+        .container { max-width: var(--max-width); margin: 0 auto; padding: 2rem 1rem; }
+        h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+        h2 { font-size: 1.4rem; margin: 2rem 0 0.5rem; border-bottom: 2px solid #eee; padding-bottom: 0.3rem; }
+        .authors { color: #555; margin-bottom: 0.5rem; }
+        .venue { color: var(--accent); font-weight: 600; margin-bottom: 1rem; }
+        .links { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 2rem; }
+        .links a { display: inline-block; padding: 0.4rem 1rem; background: var(--accent); color: white; text-decoration: none; border-radius: 4px; font-size: 0.9rem; }
+        .links a:hover { opacity: 0.85; }
+        .teaser { width: 100%; margin: 1.5rem 0; border-radius: 8px; }
+        .abstract { background: #f8f9fa; padding: 1.2rem; border-radius: 8px; margin: 1rem 0; }
+        pre { background: #f0f0f0; padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; }
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: center; }
+        th { background: #f0f0f0; }
+        .best { font-weight: bold; color: var(--accent); }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <h1>Paper Title Goes Here</h1>
+    <p class="authors">
+        <strong>Author One</strong><sup>1</sup>,
+        Author Two<sup>2</sup>,
+        Author Three<sup>1</sup>
+    </p>
+    <p class="authors"><sup>1</sup>University A, <sup>2</sup>University B</p>
+    <p class="venue">NeurIPS / ICML / ICLR 2026</p>
+
+    <div class="links">
+        <a href="#">Paper (PDF)</a>
+        <a href="#">arXiv</a>
+        <a href="#">Code (GitHub)</a>
+        <a href="#">Demo (HF Spaces)</a>
+        <a href="#">Models (HF Hub)</a>
+    </div>
+
+    <!-- TODO: Replace with your teaser figure -->
+    <!-- <img src="teaser.png" alt="Method overview" class="teaser"> -->
+
+    <h2>Abstract</h2>
+    <div class="abstract">
+        <p>Your abstract goes here. Keep it identical to the paper submission.</p>
+    </div>
+
+    <h2>Key Results</h2>
+    <table>
+        <tr><th>Method</th><th>Metric 1</th><th>Metric 2</th></tr>
+        <tr><td>Baseline A</td><td>85.2</td><td>72.1</td></tr>
+        <tr><td>Baseline B</td><td>87.4</td><td>74.3</td></tr>
+        <tr><td><strong>Ours</strong></td><td class="best">91.0</td><td class="best">79.8</td></tr>
+    </table>
+
+    <h2>Method Overview</h2>
+    <p>Brief description of your method with a figure.</p>
+
+    <h2>BibTeX</h2>
+    <pre>
+@inproceedings{author2026title,
+    title     = {Paper Title Goes Here},
+    author    = {One, Author and Two, Author and Three, Author},
+    booktitle = {Conference Name},
+    year      = {2026}
+}
+    </pre>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Experiment outputs (track via W&B, not git)
+outputs/
+logs/
+wandb/
+lightning_logs/
+multirun/
+
+# Data (too large for git -- use DVC or symlinks)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Model checkpoints
+*.ckpt
+*.pt
+*.pth
+*.bin
+
+# Local machine-specific configs
+configs/local/default.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Type checking & linting caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Docker
+.dockerignore
+
+# Secrets
+.env
+*.key

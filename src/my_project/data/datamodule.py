@@ -1,0 +1,92 @@
+"""Example dataset and dataloader factory.
+
+Replace with your actual dataset. Demonstrates reproducible data loading
+with seeded splits and worker init.
+"""
+
+from dataclasses import dataclass
+
+import torch
+from torch.utils.data import DataLoader, Dataset, random_split
+
+from my_project.utils.seed import seed_worker
+
+
+class ExampleDataset(Dataset):
+    """Placeholder dataset -- replace with your own.
+
+    Args:
+        n_samples: Number of synthetic samples.
+        n_features: Feature dimensionality.
+        n_classes: Number of target classes.
+    """
+
+    def __init__(self, n_samples: int = 1000, n_features: int = 32, n_classes: int = 10) -> None:
+        self.data = torch.randn(n_samples, n_features)
+        self.targets = torch.randint(0, n_classes, (n_samples,))
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.data[idx], self.targets[idx]
+
+
+@dataclass
+class DataLoaders:
+    """Train and val dataloaders."""
+
+    train: DataLoader
+    val: DataLoader
+
+
+def create_dataloaders(
+    n_samples: int = 1000,
+    n_features: int = 32,
+    n_classes: int = 10,
+    batch_size: int = 64,
+    num_workers: int = 4,
+    val_split: float = 0.2,
+    seed: int = 42,
+) -> DataLoaders:
+    """Create train and val dataloaders with reproducible splitting.
+
+    Args:
+        n_samples: Total dataset size.
+        n_features: Feature dimensionality.
+        n_classes: Number of classes.
+        batch_size: Batch size for all dataloaders.
+        num_workers: Number of DataLoader workers.
+        val_split: Fraction of data used for validation.
+        seed: Seed for the train/val split and worker init.
+
+    Returns:
+        DataLoaders with train and val loaders.
+    """
+    dataset = ExampleDataset(n_samples=n_samples, n_features=n_features, n_classes=n_classes)
+
+    n_val = int(len(dataset) * val_split)
+    n_train = len(dataset) - n_val
+    generator = torch.Generator().manual_seed(seed)
+    train_set, val_set = random_split(dataset, [n_train, n_val], generator=generator)
+
+    g = torch.Generator().manual_seed(seed)
+    train_loader = DataLoader(
+        train_set,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        worker_init_fn=seed_worker,
+        generator=g,
+        pin_memory=True,
+        persistent_workers=num_workers > 0,
+    )
+    val_loader = DataLoader(
+        val_set,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+        persistent_workers=num_workers > 0,
+    )
+    return DataLoaders(train=train_loader, val=val_loader)

@@ -1,0 +1,5 @@
+# Lightweight logger for quick local runs (no external service needed)
+csv:
+  _target_: lightning.pytorch.loggers.CSVLogger
+  save_dir: "${hydra:runtime.output_dir}"
+  name: "csv_logs"

@@ -1,0 +1,4 @@
+tensorboard:
+  _target_: lightning.pytorch.loggers.TensorBoardLogger
+  save_dir: "${hydra:runtime.output_dir}"
+  name: "tensorboard"
