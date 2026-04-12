@@ -225,13 +225,13 @@ Distilled from the advice of [Bengio](https://cifar.ca/cifarnews/2018/08/01/q-a-
 | What | Tool | Why |
 |---|---|---|
 | Config | Hydra + OmegaConf | CLI overrides, composition, auto-snapshots |
-| Tracking | W&B (free academic) | Best UI, git integration, sweeps |
+| Tracking | TensorBoard (default) / W&B (cloud) / Aim (local) | Switch via config: `logger=aim` for sensitive data, `logger=wandb` for public |
 | Training | Lightning Fabric | Multi-GPU, mixed precision, readable training loop |
 | Shapes | jaxtyping + beartype | Runtime shape checking + self-documenting |
 | Docs | MkDocs + mkdocstrings | Auto-generated from docstrings |
 | Formatting | Ruff + pre-commit | One tool, milliseconds, catches everything |
 | Types | mypy (relaxed mode) | Catch bugs early |
-| Stats | scipy.stats (wilcoxon, ttest_rel) | Paired significance tests |
+| Stats | scipy.stats + pingouin (optional) | Paired tests + publication-ready output with effect sizes |
 | Demos | Gradio on HF Spaces | Free hosting, ML-native widgets |
 | Project page | Academic Project Page Template | Battle-tested, GitHub Pages |
 | Containers | Docker + NVIDIA base images | Full environment reproducibility |

@@ -1,4 +1,7 @@
+# TensorBoard logger — local, lightweight
+# Usage: python src/my_project/train.py logger=tensorboard
+# Dashboard: tensorboard --logdir=outputs
 tensorboard:
-  _target_: lightning.pytorch.loggers.TensorBoardLogger
-  save_dir: "${hydra:runtime.output_dir}"
+  _target_: lightning.fabric.loggers.TensorBoardLogger
+  root_dir: "${hydra:runtime.output_dir}"
   name: "tensorboard"

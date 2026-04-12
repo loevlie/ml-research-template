@@ -46,6 +46,12 @@ python src/my_project/eval.py ckpt_path=/path/to/checkpoint.ckpt
 
 # HP search with Optuna
 python src/my_project/train.py -m hparams_search=optuna
+
+# Switch logger via config (tensorboard is default)
+python src/my_project/train.py logger=wandb          # cloud — needs: pip install -e ".[tracking-wandb]"
+python src/my_project/train.py logger=aim             # local — needs: pip install -e ".[tracking-aim]"
+python src/my_project/train.py logger=tensorboard     # local (default)
+python src/my_project/train.py logger=csv             # local, zero dependencies
 ```
 
 ## Project Structure
@@ -100,7 +106,7 @@ python src/my_project/train.py -m hparams_search=optuna
 |------|---------|-------------|
 | [Lightning Fabric](https://lightning.ai/docs/fabric/) | Device/distributed | Multi-GPU, mixed precision — no hidden training loop |
 | [Hydra](https://hydra.cc/) | Config management | CLI overrides, composition, auto-snapshots per run |
-| [W&B](https://wandb.ai/) | Experiment tracking | Free for academics, best UI, git integration |
+| [TensorBoard](https://www.tensorflow.org/tensorboard) / [W&B](https://wandb.ai/) / [Aim](https://aimstack.io/) | Experiment tracking | Switchable via config — TensorBoard (default), W&B (cloud), Aim (local with rich UI) |
 | [jaxtyping](https://github.com/patrick-kidger/jaxtyping) + [beartype](https://github.com/beartype/beartype) | Shape checking | Runtime shape verification + self-documenting signatures |
 | [MkDocs](https://www.mkdocs.org/) + [mkdocstrings](https://mkdocstrings.github.io/) | Documentation | Auto-generated from Google-style docstrings |
 | [Ruff](https://github.com/astral-sh/ruff) | Linting + formatting | Replaces black+isort+flake8 in one tool, millisecond speed |

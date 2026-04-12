@@ -1,5 +1,6 @@
-# Lightweight logger for quick local runs (no external service needed)
+# CSV logger — zero dependencies, just flat files
+# Usage: python src/my_project/train.py logger=csv
 csv:
-  _target_: lightning.pytorch.loggers.CSVLogger
-  save_dir: "${hydra:runtime.output_dir}"
+  _target_: lightning.fabric.loggers.CSVLogger
+  root_dir: "${hydra:runtime.output_dir}"
   name: "csv_logs"

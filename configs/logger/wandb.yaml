@@ -1,10 +1,6 @@
+# W&B logger — for public data / collaboration
+# Usage: python src/my_project/train.py logger=wandb
 wandb:
-  _target_: lightning.fabric.loggers.TensorBoardLogger
-  root_dir: "${hydra:runtime.output_dir}"
-  name: "logs"
-
-# To use W&B instead, uncomment below and comment out above:
-# wandb:
-#   _target_: lightning.fabric.loggers.CSVLogger
-#   root_dir: "${hydra:runtime.output_dir}"
-#   name: "csv_logs"
+  _target_: lightning.fabric.loggers.WandbLogger
+  project: "my_project"
+  save_dir: "${hydra:runtime.output_dir}"

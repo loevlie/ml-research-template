@@ -8,7 +8,7 @@ defaults:
   - data: default
   - model: default
   - trainer: default
-  - logger: wandb
+  - logger: tensorboard
   - experiment: null
   - hparams_search: null
   - local: default
