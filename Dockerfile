@@ -1,6 +1,6 @@
-# Reproducible training environment (Rule 20).
+# Reproducible training environment (Rule 23).
 # Build: docker build -t my_project .
-# Run:   docker run --gpus all -v $(pwd):/workspace my_project python src/my_project/train.py
+# Run:   docker run --gpus all -v $(pwd):/workspace my_project uv run python src/my_project/train.py
 
 FROM nvidia/cuda:12.4.0-cudnn-devel-ubuntu22.04
 
@@ -9,18 +9,18 @@ ENV PYTHONUNBUFFERED=1
 
 # System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 python3.11-venv python3-pip git && \
+    curl git && \
     rm -rf /var/lib/apt/lists/*
 
-RUN ln -sf /usr/bin/python3.11 /usr/bin/python
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /workspace
 
-# Install Python dependencies (cached layer)
-COPY pyproject.toml .
-RUN pip install --no-cache-dir -e ".[dev]"
+# Install Python + dependencies (cached layer)
+COPY pyproject.toml uv.lock .python-version ./
+RUN uv sync --locked --no-install-project
 
-# Copy project
+# Copy project and install
 COPY . .
-
-RUN pip install --no-cache-dir -e .
+RUN uv sync --locked

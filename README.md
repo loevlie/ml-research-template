@@ -17,23 +17,34 @@
 ## Installation
 
 ```bash
+# Install uv (if you don't have it)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and install
 git clone https://github.com/username/my-project.git
 cd my-project
-pip install -e ".[dev]"
-pre-commit install
+uv sync --extra dev
+uv run pre-commit install
+
+# Optional: add tracking backends
+uv sync --extra tracking-wandb   # W&B (cloud)
+uv sync --extra tracking-aim     # Aim (local, rich UI)
+
+# Optional: publication-ready statistics
+uv sync --extra stats            # pingouin
 ```
 
 ## Quick Start
 
 ```bash
 # Train with defaults
-python src/my_project/train.py
+uv run python src/my_project/train.py
 
 # Train with CLI overrides
-python src/my_project/train.py model.lr=1e-3 data.batch_size=128
+uv run python src/my_project/train.py model.lr=1e-3 data.batch_size=128
 
 # Run a named experiment config
-python src/my_project/train.py experiment=example
+uv run python src/my_project/train.py experiment=example
 
 # Multi-seed run (5 seeds)
 bash scripts/run_seeds.sh experiment=example seeds="42,123,456,789,1337"
@@ -42,16 +53,16 @@ bash scripts/run_seeds.sh experiment=example seeds="42,123,456,789,1337"
 python scripts/aggregate_seeds.py outputs/multi_seed_YYYYMMDD_HHMMSS
 
 # Evaluate a checkpoint
-python src/my_project/eval.py ckpt_path=/path/to/checkpoint.ckpt
+uv run python src/my_project/eval.py ckpt_path=/path/to/checkpoint.ckpt
 
 # HP search with Optuna
-python src/my_project/train.py -m hparams_search=optuna
+uv run python src/my_project/train.py -m hparams_search=optuna
 
 # Switch logger via config (tensorboard is default)
-python src/my_project/train.py logger=wandb          # cloud — needs: pip install -e ".[tracking-wandb]"
-python src/my_project/train.py logger=aim             # local — needs: pip install -e ".[tracking-aim]"
-python src/my_project/train.py logger=tensorboard     # local (default)
-python src/my_project/train.py logger=csv             # local, zero dependencies
+uv run python src/my_project/train.py logger=wandb          # cloud — needs: uv sync --extra tracking-wandb
+uv run python src/my_project/train.py logger=aim             # local — needs: uv sync --extra tracking-aim
+uv run python src/my_project/train.py logger=tensorboard     # local (default)
+uv run python src/my_project/train.py logger=csv             # local, zero dependencies
 ```
 
 ## Project Structure
@@ -110,6 +121,7 @@ python src/my_project/train.py logger=csv             # local, zero dependencies
 | [jaxtyping](https://github.com/patrick-kidger/jaxtyping) + [beartype](https://github.com/beartype/beartype) | Shape checking | Runtime shape verification + self-documenting signatures |
 | [MkDocs](https://www.mkdocs.org/) + [mkdocstrings](https://mkdocstrings.github.io/) | Documentation | Auto-generated from Google-style docstrings |
 | [Ruff](https://github.com/astral-sh/ruff) | Linting + formatting | Replaces black+isort+flake8 in one tool, millisecond speed |
+| [uv](https://docs.astral.sh/uv/) | Package management | 10-100x faster than pip, cross-platform lockfile, handles CUDA/CPU PyTorch |
 | [Gradio](https://gradio.app/) | Interactive demo | ML-native widgets, one-click deploy to HF Spaces |
 
 ## Reproducing Paper Results
