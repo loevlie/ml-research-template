@@ -54,7 +54,7 @@ Distilled from the advice of [Bengio](https://cifar.ca/cifarnews/2018/08/01/q-a-
 
 ---
 
-## V. Statistical Significance
+## V. Statistical Significance (instilled by [Hughes](https://www.michaelchughes.com))
 
 29. **No claim without evidence.** Every claim of "method A outperforms method B" must be backed by a statistical test or clearly stated as a trend. ([Raschka](https://sebastianraschka.com/blog/2022/confidence-intervals-for-ml.html))
 
