@@ -1,5 +1,7 @@
 # Denny's Rules to Live By
 
+The best researchers I've worked with all seem to have rules like these, not written down anywhere, just internalized through years of practice. I wanted to write mine down so I could hold myself to them. Shout out to [Ethan Harvey](https://ethanharvey.com/) at Tufts who is one of those researchers.
+
 *A PhD researcher's operating manual for rigorous, reproducible, and publishable ML research.*
 
 Distilled from the advice of [Bengio](https://cifar.ca/cifarnews/2018/08/01/q-a-with-yoshua-bengio/), [Gebru](https://doi.org/10.1145/3458723), [Hamming](https://www.cs.virginia.edu/~robins/YouAndYourResearch.html), [Hinton](https://digitalhabitats.global/blogs/synthetic-minds/geoffrey-hinton-on-working-with-ilya-choosing-problems-and-the-power-of-intuition), [Karpathy](http://karpathy.github.io/2019/04/25/recipe/), [LeCun](https://www.youtube.com/watch?v=Umi6Vkv9DNQ), [Li](https://profiles.stanford.edu/fei-fei-li), [Ng](https://www.kdnuggets.com/2019/09/advice-building-machine-learning-career-research-papers-andrew-ng.html), [Pineau](https://www.cs.mcgill.ca/~jpineau/ReproducibilityChecklist.pdf), [Raschka](https://sebastianraschka.com/blog/2022/confidence-intervals-for-ml.html), [Schulman](http://joschu.net/blog/opinionated-guide-ml-research.html), [Varoquaux](https://gael-varoquaux.info/about.html), and hard-won community wisdom.
