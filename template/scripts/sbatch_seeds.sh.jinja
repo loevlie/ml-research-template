@@ -1,0 +1,45 @@
+#!/bin/bash
+# Multi-seed training as a SLURM array job.
+# One submission → 5 parallel runs, one seed each. Tidier `squeue` than
+# fanning out 5 separate sbatch submissions.
+#
+# Usage:
+#   sbatch scripts/sbatch_seeds.sh                           # 5 default seeds
+#   sbatch scripts/sbatch_seeds.sh experiment=example        # forward to train.py
+#   sbatch --array=0-9 scripts/sbatch_seeds.sh               # 10 seeds (edit SEEDS below)
+#
+# Edit SEEDS below to match --array range.
+#
+# Fill in for your cluster:
+# #SBATCH --partition=gpu
+# #SBATCH --account=YOURACCOUNT
+
+#SBATCH --job-name={{ package_name }}-seeds
+#SBATCH --array=0-4
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --gpus-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
+#SBATCH --time=24:00:00
+#SBATCH --requeue
+#SBATCH --signal=B:USR1@90
+#SBATCH --output=logs/slurm-%A_%a.out
+#SBATCH --error=logs/slurm-%A_%a.err
+
+set -euo pipefail
+mkdir -p logs
+
+source .venv/bin/activate
+
+SEEDS=(42 123 456 789 1337)
+SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}
+RESULTS_DIR="outputs/multi_seed_${SLURM_ARRAY_JOB_ID}"
+
+srun torchrun \
+    --standalone \
+    --nproc_per_node=${SLURM_GPUS_ON_NODE:-1} \
+    src/{{ package_name }}/train.py \
+        seed=$SEED \
+        hydra.run.dir="${RESULTS_DIR}/seed_${SEED}" \
+        "$@"

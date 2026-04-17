@@ -32,6 +32,9 @@ uv sync --extra tracking-aim     # Aim (local, rich UI)
 
 # Optional: publication-ready statistics
 uv sync --extra stats            # pingouin
+
+# Optional: SLURM submission (HPC clusters)
+uv sync --extra cluster          # hydra-submitit-launcher
 ```
 
 ## Quick Start
@@ -105,6 +108,52 @@ uv run python src/{{ package_name }}/train.py logger=csv             # local, ze
 ├── tests/                       #   Smoke tests
 └── pyproject.toml               #   Dependencies, ruff, mypy, pytest config
 ```
+
+## Running on SLURM
+
+This template ships two complementary SLURM paths. Pick whichever fits.
+
+### 1. Hydra multirun (composes with sweeps)
+
+```bash
+# One-time: install the cluster extra
+uv sync --extra cluster
+
+# Fill in your partition + account in configs/launcher/slurm.yaml first.
+# Then fan out a seed sweep across SLURM:
+python src/{{ package_name }}/train.py -m launcher=slurm seed=42,43,44,45,46
+
+# Dry-run on a debug partition before committing to 24h jobs:
+python src/{{ package_name }}/train.py -m launcher=slurm_debug trainer.max_epochs=2
+
+# Compose with Optuna HP search:
+python src/{{ package_name }}/train.py -m hparams_search=optuna launcher=slurm
+```
+
+Each Hydra config override becomes one SLURM job. Logs land in `multirun/<timestamp>/`.
+
+### 2. Raw sbatch scripts (simpler, no Hydra submitit dep)
+
+```bash
+# Single GPU / multi-GPU on one node:
+sbatch scripts/sbatch_train.sh experiment=example
+
+# Multi-seed as a SLURM array job (one submission, N parallel runs):
+sbatch scripts/sbatch_seeds.sh experiment=example
+```
+
+Both scripts assume `.venv/` exists on a shared filesystem. Create it on the login node with `uv sync --extra dev --extra cluster`.
+
+### Preemption survival
+
+The sbatch scripts use `--signal=B:USR1@90` — SIGUSR1 90s before walltime. Wire Lightning's `SLURMEnvironment(auto_requeue=True)` into your `Fabric(...)` call and your job checkpoints and requeues itself automatically.
+
+### Notes
+
+- **Partition & account:** edit `configs/launcher/slurm.yaml` or pass `hydra.launcher.partition=gpu hydra.launcher.account=xyz` on the CLI. Use `configs/local/` (gitignored) to keep machine-specific values out of git.
+- **Optuna across jobs:** set `hydra.sweeper.storage: sqlite:///$PWD/optuna.db` on a shared filesystem so trials coordinate across nodes. Without shared storage, an N-trial sweep runs as N independent random searches.
+- **Multi-node DDP:** outside the scope of these scripts. Use the `scontrol show hostnames` + `torchrun --rdzv-backend=c10d` pattern from the [PyTorch examples repo](https://github.com/pytorch/examples/tree/main/distributed/ddp-tutorial-series/slurm).
+- **Container runtimes:** if your cluster has Pyxis/Enroot, add `--container-image=...` to `hydra.launcher.additional_parameters` in `slurm.yaml`.
 
 ## Tools
 

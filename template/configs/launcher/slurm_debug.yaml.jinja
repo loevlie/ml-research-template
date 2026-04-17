@@ -1,0 +1,25 @@
+# @package _global_
+#
+# Fast SLURM config for dry-running cluster submission before committing
+# to 24h jobs. Short timeout, 1 GPU, debug partition if your cluster has one.
+#
+# Usage:
+#   python src/{{ package_name }}/train.py -m launcher=slurm_debug trainer.max_epochs=2
+
+defaults:
+  - override /hydra/launcher: submitit_slurm
+
+hydra:
+  launcher:
+    timeout_min: 30           # 30 min — crash fast if something is wrong
+    nodes: 1
+    tasks_per_node: 1
+    gpus_per_node: 1
+    cpus_per_task: 4
+    mem_gb: 32
+    partition: ???            # fill in: 'debug', 'devel', 'test', etc.
+    account: ???
+    additional_parameters:
+      signal: "USR1@90"
+    setup:
+      - "source .venv/bin/activate"

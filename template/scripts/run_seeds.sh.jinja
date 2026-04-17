@@ -29,6 +29,18 @@ echo "Seeds: ${SEEDS} (${N_SEEDS} runs)"
 echo "Args:  ${FORWARD_ARGS[*]:-<defaults>}"
 echo "==========================="
 
+# --- SLURM hint ---
+# If sbatch is available on this host and we're not inside a job already,
+# nudge the user toward the array-job launcher instead of a local loop.
+if command -v sbatch >/dev/null 2>&1 && [ -z "${SLURM_JOB_ID:-}" ]; then
+    echo ""
+    echo "Hint: sbatch is available. For parallel multi-seed on SLURM, use:"
+    echo "    sbatch scripts/sbatch_seeds.sh ${FORWARD_ARGS[*]:-}"
+    echo "Continuing with local sequential loop in 3 seconds..."
+    echo ""
+    sleep 3
+fi
+
 # --- Run each seed ---
 RESULTS_DIR="outputs/multi_seed_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$RESULTS_DIR"

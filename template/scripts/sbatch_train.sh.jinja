@@ -1,0 +1,40 @@
+#!/bin/bash
+# Single-node, multi-GPU training on SLURM.
+#
+# Usage:
+#   sbatch scripts/sbatch_train.sh                           # defaults
+#   sbatch scripts/sbatch_train.sh experiment=example        # forward to train.py
+#   sbatch scripts/sbatch_train.sh model.lr=1e-3 seed=123
+#
+# Preemption: --signal=B:USR1@90 sends SIGUSR1 90s before walltime. Lightning's
+# SLURMEnvironment(auto_requeue=True) catches it, checkpoints, and requeues.
+#
+# Fill in for your cluster before first use (or pass via --partition/--account):
+# #SBATCH --partition=gpu
+# #SBATCH --account=YOURACCOUNT
+
+#SBATCH --job-name={{ package_name }}
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --gpus-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
+#SBATCH --time=24:00:00
+#SBATCH --requeue
+#SBATCH --signal=B:USR1@90
+#SBATCH --output=logs/slurm-%j.out
+#SBATCH --error=logs/slurm-%j.err
+
+set -euo pipefail
+mkdir -p logs
+
+# Activate the uv venv. Create it on the login node first:
+#   uv sync --extra dev --extra cluster
+source .venv/bin/activate
+
+# One srun + torchrun pair handles single-node multi-GPU DDP.
+# For multi-node DDP, see the note in README under "Running on SLURM".
+srun torchrun \
+    --standalone \
+    --nproc_per_node=${SLURM_GPUS_ON_NODE:-1} \
+    src/{{ package_name }}/train.py "$@"

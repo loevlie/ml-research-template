@@ -74,6 +74,10 @@ tracking-aim = [
 stats = [
     "pingouin>=0.5.4",
 ]
+cluster = [
+    # SLURM submission via Hydra multirun: `train.py -m launcher=slurm ...`
+    "hydra-submitit-launcher>=1.2.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
