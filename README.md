@@ -6,7 +6,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Copier](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcopier-org%2Fcopier%2Fmaster%2Fimg%2Fbadge%2Fcopier-badge_blue.json)
+![Copier](https://img.shields.io/badge/templated%20with-copier-a48cdc)
 ![uv](https://img.shields.io/badge/managed%20by-uv-blueviolet)
 ![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?logo=PyTorch&logoColor=white)
 
