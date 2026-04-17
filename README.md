@@ -16,8 +16,6 @@
   <a href="#why-this-template">Why this template</a>
   &nbsp;•&nbsp;
   <a href="#multi-seed--significance-testing">Multi-seed demo</a>
-  &nbsp;•&nbsp;
-  <a href="#alternatives">Alternatives</a>
 </p>
 
 <img src="demo.gif" alt="copier copy demo" width="800" />
@@ -56,8 +54,6 @@ That's it. Answer ~10 prompts, get a ready-to-train project with git initialized
 - **Skip this if you're doing non-PyTorch work** (JAX, TF) — not for you.
 
 - **Skip this if you don't want to learn Hydra or Fabric** — expect a learning curve.
-
-- **Skip this if a template needs thousands of stars before you'll try it** — this is new. Stars will come.
 
 ---
 
@@ -143,20 +139,6 @@ copier update --trust
 ```
 
 Pulls template improvements (new CI rules, pre-commit updates, config defaults) into your project. Files listed in `_skip_if_exists` (your model, data, README, experiment configs) are preserved. Other conflicts show up as `.rej` files or inline markers — three-way merge, not clobber.
-
----
-
-## Alternatives
-
-**Each template has its sweet spot. This one is for ML *researchers*** — people who write their own training loops, run multi-seed experiments, and publish with significance tests.
-
-| Template | Best for |
-|---|---|
-| **[lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template)** | ML engineers using Lightning `Trainer`. Big community (~4k+ stars), battle-tested. Use if you want callbacks + Strategy-based distributed training. |
-| **[cookiecutter-data-science](https://github.com/drivendataorg/cookiecutter-data-science)** | Notebook-heavy data analysis, EDA, Kaggle. Use if you're not training from scratch. |
-| **[cookiecutter-uv](https://github.com/fpgmaas/cookiecutter-uv)** | Modern Python *library* template. Use if you're writing a pip-installable package, not running experiments. |
-| **[simple-modern-uv](https://github.com/jlevy/simple-modern-uv)** | Minimalist Python template. Use if you want the absolute thinnest skeleton. |
-| **ml-research-template** (this) | **ML research:** custom training loops, statistical rigor, multi-project consistency via `copier update`. |
 
 ## Projects using this template
 
