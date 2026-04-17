@@ -19,7 +19,7 @@ uv run python src/<your_package_name>/train.py
 You can also render from a local checkout while developing:
 
 ```bash
-copier copy --trust /path/to/ml-project-template /tmp/new-project
+copier copy --trust /path/to/ml-research-template /tmp/new-project
 ```
 
 ## What you'll be asked
