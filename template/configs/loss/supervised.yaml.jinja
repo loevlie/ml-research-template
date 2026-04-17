@@ -1,0 +1,4 @@
+# Supervised cross-entropy — the default.
+# Swap by running: python src/{{ package_name }}/train.py loss=<name>
+_target_: {{ package_name }}.objectives.SupervisedObjective
+label_smoothing: 0.0

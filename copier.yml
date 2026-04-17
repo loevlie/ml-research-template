@@ -19,9 +19,12 @@ _skip_if_exists:
   # Files users typically edit heavily — don't clobber on `copier update`.
   - "src/{{ package_name }}/models/module.py"
   - "src/{{ package_name }}/data/datamodule.py"
+  - "src/{{ package_name }}/data/augmentations.py"
+  - "src/{{ package_name }}/objectives.py"
   - "configs/experiment/example.yaml"
   - "configs/data/default.yaml"
   - "configs/model/default.yaml"
+  - "configs/loss/supervised.yaml"
   - "README.md"
 
 _exclude:

@@ -109,6 +109,48 @@ uv run python src/{{ package_name }}/train.py logger=csv             # local, ze
 └── pyproject.toml               #   Dependencies, ruff, mypy, pytest config
 ```
 
+## Swapping losses / Self-supervised
+
+Loss + forward pass are factored into a single `Objective` (see `src/{{ package_name }}/objectives.py`). The training loop in `training_loop.py` never references a specific loss — it just calls `objective(model, batch)` and uses the returned `"loss"`. Swap objectives via Hydra:
+
+```bash
+# Default: supervised cross-entropy
+uv run python src/{{ package_name }}/train.py
+
+# Different loss (after adding your objective + config):
+uv run python src/{{ package_name }}/train.py loss=contrastive
+uv run python src/{{ package_name }}/train.py loss=masked_column
+```
+
+To add a new objective:
+
+1. **Define the class** in `src/{{ package_name }}/objectives.py`:
+
+    ```python
+    class ContrastiveObjective:
+        def __init__(self, temperature: float = 0.1) -> None:
+            self.tau = temperature
+
+        def __call__(self, model, batch):
+            x1, x2 = batch                        # pair-yielding DataLoader
+            z1, z2 = model(x1), model(x2)
+            loss = info_nce(z1, z2, tau=self.tau)
+            return {"loss": loss}                 # omit logits/targets — val loop skips acc
+    ```
+
+2. **Add a Hydra config** at `configs/loss/contrastive.yaml`:
+
+    ```yaml
+    _target_: {{ package_name }}.objectives.ContrastiveObjective
+    temperature: 0.1
+    ```
+
+3. **If the batch shape changed** (e.g., pairs instead of `(x, y)`), either add a new `configs/data/<name>.yaml` that points to a matching DataLoader, or extend `datamodule.py` to yield the right structure.
+
+The same pattern covers masked-column prediction (BERT-for-tables), next-state (world models), multi-task (return a weighted sum), and any SSL variant. The training loop doesn't need to know.
+
+Per-sample augmentations go in `src/{{ package_name }}/data/augmentations.py`; batch-level augs (e.g., MixUp) belong in a custom `collate_fn` or inside the objective.
+
 ## Running on SLURM
 
 This template ships two complementary SLURM paths. Pick whichever fits.
