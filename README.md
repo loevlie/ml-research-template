@@ -9,7 +9,7 @@ A [Copier](https://copier.readthedocs.io/) template for ML research projects: Py
 uv tool install copier
 
 # Generate a new project
-copier copy --trust gh:loevlied/ml-project-template path/to/new-project
+copier copy --trust gh:loevlie/ml-research-template path/to/new-project
 cd path/to/new-project
 uv run python src/<your_package_name>/train.py
 ```
