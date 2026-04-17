@@ -1,0 +1,33 @@
+# @package _global_
+#
+# Optuna hyperparameter search via Hydra's Optuna sweeper.
+# Run: python src/{{ package_name }}/train.py -m hparams_search=optuna
+#
+# Requires: pip install hydra-optuna-sweeper
+
+defaults:
+  - override /hydra/sweeper: optuna
+
+hydra:
+  sweeper:
+    direction: maximize
+    n_trials: 50
+    n_jobs: 1  # parallel trials (set >1 if you have the GPUs)
+
+    params:
+      model.lr:
+        type: float
+        low: 1e-5
+        high: 1e-2
+        log: true
+      model.hidden_dim:
+        type: categorical
+        choices: [64, 128, 256, 512]
+      model.weight_decay:
+        type: float
+        low: 1e-6
+        high: 1e-3
+        log: true
+      data.batch_size:
+        type: categorical
+        choices: [32, 64, 128, 256]

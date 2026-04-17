@@ -1,0 +1,6 @@
+# W&B logger — for public data / collaboration
+# Usage: python src/{{ package_name }}/train.py logger=wandb
+wandb:
+  _target_: lightning.fabric.loggers.WandbLogger
+  project: "{{ package_name }}"
+  save_dir: "${hydra:runtime.output_dir}"

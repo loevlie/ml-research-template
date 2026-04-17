@@ -1,0 +1,6 @@
+# CSV logger — zero dependencies, just flat files
+# Usage: python src/{{ package_name }}/train.py logger=csv
+csv:
+  _target_: lightning.fabric.loggers.CSVLogger
+  root_dir: "${hydra:runtime.output_dir}"
+  name: "csv_logs"

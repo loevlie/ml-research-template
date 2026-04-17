@@ -1,0 +1,77 @@
+"""Evaluation entry point.
+
+Usage:
+    python src/{{ package_name }}/eval.py ckpt_path=/path/to/best.ckpt
+"""
+
+import hydra
+import lightning as L
+import torch
+import torch.nn as nn
+from omegaconf import DictConfig
+
+from {{ package_name }}.data.datamodule import create_dataloaders
+from {{ package_name }}.models.module import ExampleModel
+from {{ package_name }}.utils.seed import set_seed
+
+
+@hydra.main(version_base="1.3", config_path="../../configs", config_name="eval")
+def main(cfg: DictConfig) -> None:
+    """Evaluate a trained model checkpoint.
+
+    Args:
+        cfg: Hydra config composed from configs/eval.yaml + overrides.
+    """
+    set_seed(cfg.seed, deterministic=True)
+
+    fabric = L.Fabric(
+        accelerator=cfg.trainer.accelerator,
+        devices=cfg.trainer.devices,
+        precision=cfg.trainer.precision,
+    )
+
+    # --- Data ---
+    loaders = create_dataloaders(
+        n_samples=cfg.data.n_samples,
+        n_features=cfg.data.n_features,
+        n_classes=cfg.data.n_classes,
+        batch_size=cfg.data.batch_size,
+        num_workers=cfg.data.num_workers,
+        val_split=cfg.data.val_split,
+        seed=cfg.seed,
+    )
+
+    # --- Model ---
+    model = ExampleModel(
+        n_features=cfg.model.n_features,
+        hidden_dim=cfg.model.hidden_dim,
+        n_classes=cfg.model.n_classes,
+    )
+    model = fabric.setup(model)
+    val_loader = fabric.setup_dataloaders(loaders.val)
+
+    # --- Load checkpoint ---
+    state = {"model": model}
+    fabric.load(cfg.ckpt_path, state)
+
+    # --- Evaluate ---
+    model.eval()
+    total_loss = 0.0
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        for x, y in val_loader:
+            logits = model(x)
+            loss = nn.functional.cross_entropy(logits, y)
+            total_loss += loss.item()
+            correct += (logits.argmax(dim=1) == y).sum().item()
+            total += y.size(0)
+
+    avg_loss = total_loss / len(val_loader)
+    accuracy = correct / total
+    fabric.print(f"Eval | loss={avg_loss:.4f} | acc={accuracy:.4f}")
+
+
+if __name__ == "__main__":
+    main()

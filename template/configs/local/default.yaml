@@ -1,0 +1,7 @@
+# Machine-specific overrides. This file is gitignored.
+# Example: override num_workers for your laptop vs cluster.
+#
+# trainer:
+#   devices: 1
+# data:
+#   num_workers: 0

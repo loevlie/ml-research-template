@@ -1,0 +1,145 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{{ package_name|replace('_', '-') }}"
+version = "0.1.0"
+description = "{{ project_description }}"
+readme = "README.md"
+license = "MIT"
+requires-python = ">={{ python_version }}"
+authors = [
+    { name = "{{ author_name }}", email = "{{ author_email }}" },
+]
+dependencies = [
+    # Core
+    "torch>=2.2.0",
+    "lightning>=2.2.0",
+    # Config
+    "hydra-core>=1.3.0",
+    "omegaconf>=2.3.0",
+    "hydra-optuna-sweeper>=1.2.0",
+    # Tracking (tensorboard is included with torch)
+    # Shape checking & types
+    "jaxtyping>=0.2.28",
+    "beartype>=0.17.0",
+    # Data & stats
+    "numpy>=1.26.0",
+    "scipy>=1.12.0",
+    "pandas>=2.2.0",
+    # Visualization
+    "matplotlib>=3.8.0",
+    "seaborn>=0.13.0",
+    # Utilities
+    "rich>=13.7.0",
+    "tqdm>=4.66.0",
+{%- if logger == "tensorboard" %}
+    # Default logger
+    "tensorboard>=2.15.0",
+{%- elif logger == "wandb" %}
+    # Default logger
+    "wandb>=0.16.0",
+{%- elif logger == "aim" %}
+    # Default logger
+    "aim>=3.19.0",
+{%- endif %}
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.4.0",
+    "mypy>=1.9.0",
+    "pre-commit>=3.7.0",
+    "pytest>=8.1.0",
+    "pytest-cov>=5.0.0",
+    "ipykernel>=6.29.0",
+]
+{%- if include_example %}
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.24.0",
+]
+demo = [
+    "gradio>=4.20.0",
+]
+{%- endif %}
+tracking-wandb = [
+    "wandb>=0.16.0",
+]
+tracking-aim = [
+    "aim>=3.19.0",
+]
+stats = [
+    "pingouin>=0.5.4",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# --- uv: PyTorch CUDA/CPU handling ---
+# Docs: https://docs.astral.sh/uv/guides/integration/pytorch/
+{%- if cuda_version == "cpu" %}
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
+torchvision = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+{%- else %}
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-{{ cuda_version }}", marker = "sys_platform == 'linux'" },
+]
+torchvision = [
+    { index = "pytorch-{{ cuda_version }}", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-{{ cuda_version }}"
+url = "https://download.pytorch.org/whl/{{ cuda_version }}"
+explicit = true
+{%- endif %}
+
+# --- Ruff (replaces black + isort + flake8) ---
+[tool.ruff]
+line-length = 100
+target-version = "py{{ python_version|replace('.', '') }}"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",  # line length (handled by formatter)
+    "F722",  # jaxtyping shape annotations use string syntax ruff doesn't understand
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["{{ package_name }}"]
+
+# --- Mypy ---
+[tool.mypy]
+python_version = "{{ python_version }}"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true  # relaxed mode to start
+
+# --- Pytest ---
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"

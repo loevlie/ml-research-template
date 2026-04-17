@@ -1,7 +1,0 @@
-# Aim logger — fully local, no data leaves your machine
-# Usage: python src/my_project/train.py logger=aim
-# Dashboard: aim up --repo=outputs
-aim:
-  _target_: aim.pytorch_lightning.AimLogger
-  experiment: "my_project"
-  repo: "${hydra:runtime.output_dir}"

@@ -1,0 +1,133 @@
+# {{ project_name }}
+
+> {{ project_description }}
+
+{% if include_example -%}
+**Paper:** [Title](link) | **Demo:** [HF Spaces](link) | **Project Page:** [link](link)
+
+## Key Results
+
+| Method | Metric 1 | Metric 2 |
+|--------|----------|----------|
+| Baseline A | 85.2 +/- 0.3 | 72.1 +/- 0.5 |
+| Baseline B | 87.4 +/- 0.4 | 74.3 +/- 0.6 |
+| **Ours** | **91.0 +/- 0.2** | **79.8 +/- 0.3** |
+
+*Mean +/- std over 5 seeds. Ours vs Baseline B: p<0.01 (Wilcoxon signed-rank).*
+
+{% endif -%}
+## Installation
+
+```bash
+# Install uv (if you don't have it)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install this project
+uv sync --extra dev
+uv run pre-commit install
+
+# Optional: extra tracking backends
+uv sync --extra tracking-wandb   # W&B (cloud)
+uv sync --extra tracking-aim     # Aim (local, rich UI)
+
+# Optional: publication-ready statistics
+uv sync --extra stats            # pingouin
+```
+
+## Quick Start
+
+```bash
+# Train with defaults
+uv run python src/{{ package_name }}/train.py
+
+# Train with CLI overrides
+uv run python src/{{ package_name }}/train.py model.lr=1e-3 data.batch_size=128
+
+{% if include_example -%}
+# Run a named experiment config
+uv run python src/{{ package_name }}/train.py experiment=example
+
+# Multi-seed run (5 seeds)
+bash scripts/run_seeds.sh experiment=example seeds="42,123,456,789,1337"
+
+# Aggregate and get significance tests
+python scripts/aggregate_seeds.py outputs/multi_seed_YYYYMMDD_HHMMSS
+
+{% endif -%}
+# Evaluate a checkpoint
+uv run python src/{{ package_name }}/eval.py ckpt_path=/path/to/checkpoint.ckpt
+
+# HP search with Optuna
+uv run python src/{{ package_name }}/train.py -m hparams_search=optuna
+
+# Switch logger via config ({{ logger }} is default)
+uv run python src/{{ package_name }}/train.py logger=wandb          # cloud — needs: uv sync --extra tracking-wandb
+uv run python src/{{ package_name }}/train.py logger=aim             # local — needs: uv sync --extra tracking-aim
+uv run python src/{{ package_name }}/train.py logger=tensorboard     # local
+uv run python src/{{ package_name }}/train.py logger=csv             # local, zero dependencies
+```
+
+## Project Structure
+
+```
+.
+├── configs/                     # Hydra configs (composable YAML)
+│   ├── data/                    #   Dataset & dataloader configs
+{% if include_example -%}
+│   ├── experiment/              #   Version-controlled experiment configs
+{% endif -%}
+│   ├── hparams_search/          #   HP search configs (Optuna)
+│   ├── logger/                  #   Experiment tracker configs
+│   ├── model/                   #   Model architecture configs
+│   ├── trainer/                 #   Fabric settings (accelerator, precision, epochs)
+│   ├── local/                   #   Machine-specific overrides (gitignored)
+│   ├── train.yaml               #   Main training config
+│   └── eval.yaml                #   Evaluation config
+├── data/
+│   ├── raw/                     #   Immutable original data
+│   └── processed/               #   Transformed, model-ready data
+{% if include_example -%}
+├── demo/app.py                  # Gradio demo for HF Spaces
+├── docs/                        # MkDocs documentation source
+├── project_page/index.html      # Academic project page
+{% endif -%}
+├── notebooks/                   #   Exploration notebooks (not training)
+├── scripts/
+│   ├── run_seeds.sh             #   Multi-seed experiment launcher
+│   └── aggregate_seeds.py       #   Aggregate results + significance tests
+├── src/{{ package_name }}/
+│   ├── data/datamodule.py       #   Dataset + DataLoader factory
+│   ├── models/module.py         #   nn.Module with jaxtyping shapes
+│   ├── utils/seed.py            #   Reproducibility (seed all RNGs)
+│   ├── utils/stats.py           #   Significance tests & reporting
+│   ├── train.py                 #   Training entry point (Hydra)
+│   └── eval.py                  #   Evaluation entry point (Hydra)
+├── tests/                       #   Smoke tests
+└── pyproject.toml               #   Dependencies, ruff, mypy, pytest config
+```
+
+## Tools
+
+| Tool | Purpose |
+|------|---------|
+| [Lightning Fabric](https://lightning.ai/docs/fabric/) | Multi-GPU, mixed precision — no hidden training loop |
+| [Hydra](https://hydra.cc/) | Config management + CLI overrides |
+| [TensorBoard](https://www.tensorflow.org/tensorboard) / [W&B](https://wandb.ai/) / [Aim](https://aimstack.io/) | Experiment tracking (switchable) |
+| [jaxtyping](https://github.com/patrick-kidger/jaxtyping) + [beartype](https://github.com/beartype/beartype) | Runtime shape checking |
+| [Ruff](https://github.com/astral-sh/ruff) | Linting + formatting |
+| [uv](https://docs.astral.sh/uv/) | Package management |
+
+## Citation
+
+```bibtex
+@inproceedings{author2026title,
+    title     = {Paper Title},
+    author    = { {{- author_name -}} },
+    booktitle = {Conference},
+    year      = {2026}
+}
+```
+
+## License
+
+MIT
