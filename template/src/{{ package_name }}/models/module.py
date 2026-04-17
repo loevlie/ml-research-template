@@ -6,7 +6,7 @@ signatures with jaxtyping + beartype.
 
 import torch.nn as nn
 from beartype import beartype
-from jaxtyping import Float
+from jaxtyping import Float, jaxtyped
 from torch import Tensor
 
 
@@ -34,6 +34,6 @@ class ExampleModel(nn.Module):
             nn.Linear(hidden_dim, n_classes),
         )
 
-    @beartype
+    @jaxtyped(typechecker=beartype)
     def forward(self, x: Float[Tensor, "batch features"]) -> Float[Tensor, "batch classes"]:
         return self.net(x)  # type: ignore[no-any-return]

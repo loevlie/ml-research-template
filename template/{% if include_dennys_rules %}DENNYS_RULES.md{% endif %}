@@ -90,11 +90,11 @@ Distilled from the advice of [Bengio](https://cifar.ca/cifarnews/2018/08/01/q-a-
 
 37. **Shape-annotated signatures with `jaxtyping` + `beartype`:**
     ```python
-    from jaxtyping import Float, Int
+    from jaxtyping import Float, Int, jaxtyped
     from torch import Tensor
     from beartype import beartype
 
-    @beartype
+    @jaxtyped(typechecker=beartype)
     def forward(
         self,
         x: Float[Tensor, "batch channels height width"],
@@ -102,7 +102,7 @@ Distilled from the advice of [Bengio](https://cifar.ca/cifarnews/2018/08/01/q-a-
     ) -> Float[Tensor, "batch num_classes"]:
         ...
     ```
-    Every function that touches tensors documents its shapes in the signature. This is your documentation AND your runtime shape-checker.
+    Every function that touches tensors documents its shapes in the signature. `@jaxtyped(typechecker=beartype)` enforces both the per-argument types *and* the cross-argument axis-size consistency (e.g., the `batch` dim is checked to match across `x`, `labels`, and the return).
 
 38. **Google-style docstrings** for all public functions:
     ```python
