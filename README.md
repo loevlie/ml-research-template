@@ -1,6 +1,8 @@
+<div align="center">
+
 # ml-research-template
 
-> **A Copier template for ML research projects** — PyTorch + Lightning Fabric + Hydra + uv, with multi-seed significance testing, runtime shape checking, and `copier update` baked in.
+<p><i>A Copier template for ML research projects — PyTorch + Lightning Fabric + Hydra + uv,<br>with multi-seed significance testing and <code>copier update</code> baked in.</i></p>
 
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
@@ -8,7 +10,23 @@
 ![uv](https://img.shields.io/badge/managed%20by-uv-blueviolet)
 ![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?logo=PyTorch&logoColor=white)
 
-![demo](demo.gif)
+<p>
+  <a href="#quick-start"><b>Quick start</b></a>
+  &nbsp;•&nbsp;
+  <a href="#why-this-template">Why this template</a>
+  &nbsp;•&nbsp;
+  <a href="#multi-seed--significance-testing">Multi-seed demo</a>
+  &nbsp;•&nbsp;
+  <a href="#alternatives">Alternatives</a>
+</p>
+
+<img src="demo.gif" alt="copier copy demo" width="800" />
+
+<p><i>Generate a project in ~30 seconds.</i></p>
+
+</div>
+
+---
 
 ```bash
 uv tool install copier
@@ -17,27 +35,31 @@ copier copy --trust gh:loevlie/ml-research-template my-project
 
 That's it. Answer ~10 prompts, get a ready-to-train project with git initialized, deps locked, and pre-commit installed.
 
+---
+
 ## Why this template
 
-✅ **Fabric, not Trainer.** The training loop is ~40 explicit lines you can read and edit. Modify it for custom optimizers, multi-network updates, adversarial training, RL, curriculum learning — no callbacks, no hidden machinery.
+- ⚡ **Fabric, not Trainer.** The training loop is ~40 explicit lines you can read and edit. Modify it for custom optimizers, multi-network updates, adversarial training, RL, curriculum learning — no callbacks, no hidden machinery.
 
-✅ **Statistical rigor on day one.** `scripts/run_seeds.sh` launches N seeds; `scripts/aggregate_seeds.py` computes bootstrap CIs + paired Wilcoxon/t-tests + Cohen's d. Publication-ready out of the box.
+- ⚡ **Statistical rigor on day one.** `scripts/run_seeds.sh` launches N seeds; `scripts/aggregate_seeds.py` computes bootstrap CIs + paired Wilcoxon/t-tests + Cohen's d. Publication-ready out of the box.
 
-✅ **Runtime shape checking** via `@jaxtyped(typechecker=beartype)` on tensor functions. Catches broadcasting bugs on the first forward pass, not after a day of wasted training.
+- ⚡ **Runtime shape checking** via `@jaxtyped(typechecker=beartype)` on tensor functions. Catches broadcasting bugs on the first forward pass, not after a day of wasted training.
 
-✅ **Copier-native, not "Use this template."** Generate with prompts instead of renaming 20 files by hand. `copier update` pulls template improvements into existing projects without clobbering your work — the compounding win across multiple projects.
+- ⚡ **Copier-native, not "Use this template."** Generate with prompts instead of renaming 20 files by hand. `copier update` pulls template improvements into existing projects without clobbering your work — the compounding win across multiple projects.
 
-✅ **uv + PyTorch CUDA wheels pre-wired.** Pick `cu118`/`cu124`/`cu126`/`cu128`/`cpu` at template time. 10-100× faster installs than pip.
+- ⚡ **uv + PyTorch CUDA wheels pre-wired.** Pick `cu118`/`cu124`/`cu126`/`cu128`/`cpu` at template time. 10-100× faster installs than pip.
 
 ## Why you might NOT want this
 
-❌ If you want a Lightning `Trainer` black box (callbacks, auto-EMA, Strategy-based DeepSpeed/FSDP), use **[lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template)** instead.
+- **Skip this if you want a Lightning `Trainer` black box** (callbacks, auto-EMA, Strategy-based DeepSpeed/FSDP) — use **[lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template)** instead.
 
-❌ If you're doing non-PyTorch work (JAX, TF), not for you.
+- **Skip this if you're doing non-PyTorch work** (JAX, TF) — not for you.
 
-❌ If you don't want to learn Hydra or Fabric — expect a learning curve.
+- **Skip this if you don't want to learn Hydra or Fabric** — expect a learning curve.
 
-❌ If a template needs 4k stars before you'll try it — this is new. Stars will come.
+- **Skip this if a template needs thousands of stars before you'll try it** — this is new. Stars will come.
+
+---
 
 ## Quick start
 
@@ -80,6 +102,8 @@ my-project/
 └── pyproject.toml             # uv-managed deps, CUDA index routing
 ```
 
+---
+
 ## Multi-seed + significance testing
 
 ```bash
@@ -120,6 +144,8 @@ copier update --trust
 
 Pulls template improvements (new CI rules, pre-commit updates, config defaults) into your project. Files listed in `_skip_if_exists` (your model, data, README, experiment configs) are preserved. Other conflicts show up as `.rej` files or inline markers — three-way merge, not clobber.
 
+---
+
 ## Alternatives
 
 **Each template has its sweet spot. This one is for ML *researchers*** — people who write their own training loops, run multi-seed experiments, and publish with significance tests.
@@ -155,6 +181,8 @@ _Submit a PR to [README.md](README.md) to add yours._
 | `include_dennys_rules` | `false` | Include Dennis Loevlie's research operating manual (`DENNYS_RULES.md`) |
 
 </details>
+
+---
 
 ## Support
 

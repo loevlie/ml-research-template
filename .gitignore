@@ -8,3 +8,6 @@ __pycache__/
 # Smoke-test rendering output
 /tmp-render/
 /_test-render*/
+
+# Demo recording source — kept local only, not committed
+demo.tape
