@@ -1,0 +1,105 @@
+"""OpenML task loading for tabular benchmarks.
+
+OpenML tasks bundle a dataset with standardized CV splits, so a task ID + fold
+fully identifies an evaluation cell — task IDs double as data versioning.
+TabArena, TALENT, and the CC18 suite all build on these.
+
+Typical use (see benchmark.py):
+
+    split = load_openml_task(task_id=31, fold=0)
+    est.fit(split.X_train, split.y_train)
+
+Preprocessing here is deliberately minimal (train-fitted ordinal encoding +
+median imputation) — the conventional floor for tabular-FM baselines. Replace
+with your own pipeline when preprocessing *is* the experiment.
+"""
+
+from dataclasses import dataclass
+
+import numpy as np
+import pandas as pd
+
+
+@dataclass
+class TaskSplit:
+    """One (task, fold) evaluation cell with train-fitted preprocessing applied."""
+
+    X_train: np.ndarray
+    y_train: np.ndarray
+    X_test: np.ndarray
+    y_test: np.ndarray
+    n_classes: int
+    task_id: int
+    fold: int
+    dataset_name: str
+
+
+def load_openml_task(task_id: int, fold: int = 0, repeat: int = 0) -> TaskSplit:
+    """Load an OpenML classification task with its standardized CV split.
+
+    Args:
+        task_id: OpenML task ID (e.g. 31 = credit-g; browse at openml.org).
+        fold: CV fold index (OpenML tasks default to 10-fold CV).
+        repeat: CV repeat index (usually 0).
+
+    Returns:
+        TaskSplit with float32 features and integer-encoded labels.
+    """
+    import openml
+    from sklearn.compose import ColumnTransformer
+    from sklearn.impute import SimpleImputer
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import LabelEncoder, OrdinalEncoder
+
+    task = openml.tasks.get_task(task_id)
+    dataset = task.get_dataset()
+    target_name: str = getattr(task, "target_name")  # noqa: B009 — loose openml typing
+    X_raw, y_raw, categorical_mask, _ = dataset.get_data(target=target_name)
+    X, y = pd.DataFrame(X_raw), pd.Series(y_raw)
+
+    train_idx, test_idx = task.get_train_test_split_indices(repeat=repeat, fold=fold)
+    X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+
+    cat_cols = [c for c, is_cat in zip(X.columns, categorical_mask, strict=True) if is_cat]
+    num_cols = [c for c in X.columns if c not in cat_cols]
+    preprocess = ColumnTransformer(
+        [
+            (
+                "cat",
+                make_pipeline(
+                    OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1),
+                    SimpleImputer(strategy="most_frequent"),
+                ),
+                cat_cols,
+            ),
+            ("num", SimpleImputer(strategy="median"), num_cols),
+        ]
+    )
+    X_train_arr = preprocess.fit_transform(X_train).astype(np.float32)
+    X_test_arr = preprocess.transform(X_test).astype(np.float32)
+
+    # Classes come from the full label column so train/test agree on encoding.
+    label_enc = LabelEncoder().fit(y)
+    y_train_arr = label_enc.transform(y.iloc[train_idx]).astype(np.int64)
+    y_test_arr = label_enc.transform(y.iloc[test_idx]).astype(np.int64)
+
+    return TaskSplit(
+        X_train=X_train_arr,
+        y_train=y_train_arr,
+        X_test=X_test_arr,
+        y_test=y_test_arr,
+        n_classes=len(label_enc.classes_),
+        task_id=task_id,
+        fold=fold,
+        dataset_name=dataset.name,
+    )
+
+
+def tasks_in_suite(suite: str | int = "OpenML-CC18") -> list[int]:
+    """Task IDs in an OpenML benchmark suite (e.g. "OpenML-CC18", 99).
+
+    Useful for generating the task list in scripts/sbatch_benchmark.sh.
+    """
+    import openml
+
+    return list(openml.study.get_suite(suite).tasks or [])

@@ -1,0 +1,13 @@
+# @package _global_
+#
+# One benchmark cell: estimator x OpenML task x fold.
+# Run: python src/{{ package_name }}/benchmark.py estimator=mlp task_id=31 fold=0
+
+seed: 42
+task_id: 31   # OpenML task ID (31 = credit-g: small, fast). Browse: openml.org
+fold: 0       # OpenML tasks ship standardized 10-fold CV splits
+
+defaults:
+  - _self_
+  - estimator: logreg
+  - local: default

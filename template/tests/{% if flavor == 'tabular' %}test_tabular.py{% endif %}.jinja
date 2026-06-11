@@ -1,0 +1,60 @@
+"""Tabular-flavor tests: sklearn contract + property-based invariances.
+
+The permutation test below is the kind of property worth testing for
+TabPFN-style in-context models: a prediction for row i must not depend on the
+order of the other rows handed to predict(). hypothesis generates the
+permutations and shrinks any failure to a minimal counterexample.
+"""
+
+import functools
+
+import numpy as np
+from hypothesis import given, settings
+from hypothesis import strategies as st
+from sklearn.base import clone
+from sklearn.datasets import make_classification
+
+from {{ package_name }}.sklearn_wrapper import TorchMLPClassifier
+
+
+@functools.lru_cache(maxsize=1)
+def _fitted_estimator() -> tuple[TorchMLPClassifier, np.ndarray]:
+    X, y = make_classification(
+        n_samples=120, n_features=8, n_classes=3, n_informative=6, random_state=0
+    )
+    est = TorchMLPClassifier(hidden_dim=16, max_epochs=5, random_state=0)
+    est.fit(X[:100], y[:100])
+    return est, X[100:].astype(np.float32)
+
+
+def test_fit_predict_roundtrip():
+    """Estimator fits and predicts labels from the training classes."""
+    est, X_test = _fitted_estimator()
+    preds = est.predict(X_test)
+    assert preds.shape == (len(X_test),)
+    assert set(preds) <= set(est.classes_)
+    proba = est.predict_proba(X_test)
+    assert proba.shape == (len(X_test), len(est.classes_))
+    np.testing.assert_allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+
+
+def test_sklearn_clone_contract():
+    """clone() works — required for GridSearchCV/cross_val_score.
+
+    Run sklearn.utils.estimator_checks.check_estimator for the full gauntlet
+    before releasing a model.
+    """
+    est = TorchMLPClassifier(hidden_dim=32, lr=5e-4)
+    cloned = clone(est)
+    assert cloned.get_params() == est.get_params()
+
+
+@settings(max_examples=10, deadline=None)
+@given(seed=st.integers(min_value=0, max_value=2**31 - 1))
+def test_predict_row_permutation_invariance(seed):
+    """Predictions for a row don't depend on the order of other rows."""
+    est, X_test = _fitted_estimator()
+    perm = np.random.default_rng(seed).permutation(len(X_test))
+    direct = est.predict_proba(X_test)
+    permuted = est.predict_proba(X_test[perm])
+    np.testing.assert_allclose(permuted, direct[perm], atol=1e-5)

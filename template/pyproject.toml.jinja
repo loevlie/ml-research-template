@@ -34,15 +34,26 @@ dependencies = [
     # Utilities
     "rich>=13.7.0",
     "tqdm>=4.66.0",
+{%- if flavor == "tabular" %}
+    # Tabular: OpenML tasks + sklearn estimator interface
+    "scikit-learn>=1.4.0",
+    "openml>=0.14.0",
+{%- elif flavor == "multimodal" %}
+    # Multimodal: backbones + data
+    "timm>=1.0.0",
+    "open_clip_torch>=2.24.0",
+    "transformers>=4.44.0",
+    "datasets>=2.20.0",
+{%- endif %}
 {%- if logger == "tensorboard" %}
     # Default logger
     "tensorboard>=2.15.0",
 {%- elif logger == "wandb" %}
     # Default logger
     "wandb>=0.16.0",
-{%- elif logger == "aim" %}
+{%- elif logger == "trackio" %}
     # Default logger
-    "aim>=3.19.0",
+    "trackio>=0.10.0",
 {%- endif %}
 ]
 
@@ -54,6 +65,10 @@ dev = [
     "pytest>=8.1.0",
     "pytest-cov>=5.0.0",
     "ipykernel>=6.29.0",
+    # Debugging quality-of-life
+    "lovely-tensors>=0.1.18",   # readable tensor reprs: shape, stats, NaN flags
+    "torchinfo>=1.8.0",         # model summaries with output shapes + param counts
+    "hypothesis-torch>=2.0.0",  # property-based tests over tensors/modules
 ]
 {%- if include_example %}
 docs = [
@@ -68,12 +83,21 @@ demo = [
 tracking-wandb = [
     "wandb>=0.16.0",
 ]
-tracking-aim = [
-    "aim>=3.19.0",
+tracking-trackio = [
+    "trackio>=0.10.0",
 ]
 stats = [
     "pingouin>=0.5.4",
 ]
+{%- if flavor == "tabular" %}
+tabular-baselines = [
+    # Foundation-model baselines for the benchmark harness.
+    # NOTE: TabPFN weights are licensed for non-commercial research use;
+    # TabICL is fully open (weights + pretraining code).
+    "tabpfn>=2.0.0",
+    "tabicl>=0.1.0",
+]
+{%- endif %}
 cluster = [
     # SLURM submission via Hydra multirun: `train.py -m launcher=slurm ...`
     "hydra-submitit-launcher>=1.2.0",

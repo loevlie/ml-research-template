@@ -1,4 +1,5 @@
+from {{ package_name }}.utils.schedulers import build_scheduler
 from {{ package_name }}.utils.seed import set_seed
 from {{ package_name }}.utils.stats import paired_significance_test, report_results
 
-__all__ = ["paired_significance_test", "report_results", "set_seed"]
+__all__ = ["build_scheduler", "paired_significance_test", "report_results", "set_seed"]

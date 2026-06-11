@@ -35,7 +35,9 @@ def load_seed_metrics(results_dir: Path) -> dict[int, dict[str, float]]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Aggregate multi-seed results")
     parser.add_argument("results_dir", type=Path, help="Directory with seed_* subdirectories")
-    parser.add_argument("--baseline", type=Path, default=None, help="Baseline results dir for comparison")
+    parser.add_argument(
+        "--baseline", type=Path, default=None, help="Baseline results dir for comparison"
+    )
     parser.add_argument("--metric", type=str, default="val/acc", help="Metric to aggregate")
     args = parser.parse_args()
 
@@ -55,7 +57,7 @@ def main() -> None:
     print(f"Std:    {np.std(scores, ddof=1):.4f}")
 
     # Bootstrap CI
-    mean, ci_lo, ci_hi = bootstrap_ci(scores)
+    _mean, ci_lo, ci_hi = bootstrap_ci(scores)
     print(f"95% CI: [{ci_lo:.4f}, {ci_hi:.4f}]")
 
     # Paired comparison if baseline provided
@@ -63,7 +65,9 @@ def main() -> None:
         baseline = load_seed_metrics(args.baseline)
         shared_seeds = sorted(set(ours.keys()) & set(baseline.keys()))
         if len(shared_seeds) < 3:
-            print(f"\nOnly {len(shared_seeds)} shared seeds -- need at least 3 for significance test.")
+            print(
+                f"\nOnly {len(shared_seeds)} shared seeds -- need at least 3 for significance test."
+            )
             return
 
         ours_paired = [ours[s][args.metric] for s in shared_seeds]

@@ -1,0 +1,5 @@
+# Symmetric InfoNCE (CLIP-style). Needs a pair-yielding DataLoader and a
+# two-tower model: model(x_a, x_b) -> (z_a, z_b). See objectives.py.
+# Usage: python src/{{ package_name }}/train.py loss=contrastive
+_target_: {{ package_name }}.objectives.ContrastiveObjective
+temperature: 0.07

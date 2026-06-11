@@ -1,6 +1,7 @@
 # W&B logger — for public data / collaboration
 # Usage: python src/{{ package_name }}/train.py logger=wandb
+# Offline SLURM nodes: WANDB_MODE=offline, then `wandb sync` from the login node.
 wandb:
-  _target_: lightning.fabric.loggers.WandbLogger
+  _target_: wandb.integration.lightning.fabric.WandbLogger
   project: "{{ package_name }}"
   save_dir: "${hydra:runtime.output_dir}"

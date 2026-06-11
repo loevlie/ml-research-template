@@ -13,6 +13,7 @@ Usage:
 """
 
 import json
+import math
 from pathlib import Path
 
 import hydra
@@ -24,6 +25,7 @@ from torch.utils.data import DataLoader
 from {{ package_name }}.data.datamodule import create_dataloaders
 from {{ package_name }}.models.module import ExampleModel
 from {{ package_name }}.training_loop import train_epoch, validate
+from {{ package_name }}.utils.schedulers import build_scheduler
 from {{ package_name }}.utils.seed import set_seed
 
 
@@ -82,18 +84,65 @@ def main(cfg: DictConfig) -> float | None:
     # --- Objective (pluggable: supervised / contrastive / masked / next-state) ---
     objective = hydra.utils.instantiate(cfg.loss)
 
-    # --- Training loop ---
-    best_val_loss = float("inf")
-    best_val_acc = 0.0
-    patience_counter = 0
+    # --- LR scheduler (per-step; trainer.scheduler.name=none keeps constant LR) ---
+    accumulate = cfg.trainer.get("accumulate_grad_batches", 1)
+    steps_per_epoch = math.ceil(len(train_loader) / accumulate)
+    scheduler = build_scheduler(
+        optimizer,
+        name=cfg.trainer.scheduler.name,
+        total_steps=cfg.trainer.max_epochs * steps_per_epoch,
+        warmup_steps=cfg.trainer.scheduler.warmup_steps,
+        min_lr_ratio=cfg.trainer.scheduler.min_lr_ratio,
+    )
+
     output_dir = Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)  # type: ignore[attr-defined]
+
+    # --- Resume ---
+    # Everything needed to continue a run lives in last.ckpt. `fabric.load`
+    # restores modules/optimizers in place and overwrites the scalar entries.
+    state: dict = {
+        "model": model,
+        "optimizer": optimizer,
+        "epoch": -1,
+        "best_val_loss": float("inf"),
+        "best_val_acc": 0.0,
+        "patience_counter": 0,
+    }
+    if scheduler is not None:
+        state["scheduler"] = scheduler
+
+    resume = cfg.trainer.get("resume")
+    resume_path: Path | None = None
+    if resume == "auto":
+        candidate = output_dir / "last.ckpt"
+        resume_path = candidate if candidate.exists() else None
+    elif resume:
+        resume_path = Path(resume)
+    if resume_path is not None:
+        fabric.load(resume_path, state)
+        fabric.print(f"Resumed from {resume_path} (epoch {state['epoch']})")
+
+    start_epoch = int(state["epoch"]) + 1
+    best_val_loss = float(state["best_val_loss"])
+    best_val_acc = float(state["best_val_acc"])
+    patience_counter = int(state["patience_counter"])
 
     fabric.print(f"Config:\n{OmegaConf.to_yaml(cfg)}")
     fabric.print(f"Output dir: {output_dir}")
     fabric.print(f"Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-    for epoch in range(cfg.trainer.max_epochs):
-        train_loss = train_epoch(fabric, model, optimizer, objective, train_loader, epoch)
+    for epoch in range(start_epoch, cfg.trainer.max_epochs):
+        train_loss = train_epoch(
+            fabric,
+            model,
+            optimizer,
+            objective,
+            train_loader,
+            epoch,
+            scheduler=scheduler,
+            accumulate_grad_batches=accumulate,
+            gradient_clip_val=cfg.trainer.get("gradient_clip_val", 1.0),
+        )
         val_loss, val_acc = validate(fabric, model, objective, val_loader, epoch)
 
         fabric.print(
@@ -106,10 +155,18 @@ def main(cfg: DictConfig) -> float | None:
             best_val_loss = val_loss
             best_val_acc = val_acc
             patience_counter = 0
-            state = {"model": model, "optimizer": optimizer, "epoch": epoch}
-            fabric.save(output_dir / "best.ckpt", state)
         else:
             patience_counter += 1
+
+        state.update(
+            epoch=epoch,
+            best_val_loss=best_val_loss,
+            best_val_acc=best_val_acc,
+            patience_counter=patience_counter,
+        )
+        if patience_counter == 0:
+            fabric.save(output_dir / "best.ckpt", state)
+        fabric.save(output_dir / "last.ckpt", state)
 
         # Early stopping
         if patience_counter >= cfg.trainer.patience:
@@ -120,6 +177,10 @@ def main(cfg: DictConfig) -> float | None:
     metrics = {"val/loss": best_val_loss, "val/acc": best_val_acc}
     with open(output_dir / "metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
+
+    # Flush loggers (CSVLogger buffers writes; trackers close their runs here).
+    for logger in fabric.loggers:
+        logger.finalize("success")
 
     fabric.print(f"Best val_loss={best_val_loss:.4f} | val_acc={best_val_acc:.4f}")
     return best_val_acc

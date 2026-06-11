@@ -36,10 +36,13 @@ SEEDS=(42 123 456 789 1337)
 SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}
 RESULTS_DIR="outputs/multi_seed_${SLURM_ARRAY_JOB_ID}"
 
+# The run dir is keyed to the array job ID, so a preempted+requeued task lands
+# in the same directory and trainer.resume=auto continues from last.ckpt.
 srun torchrun \
     --standalone \
     --nproc_per_node=${SLURM_GPUS_ON_NODE:-1} \
     src/{{ package_name }}/train.py \
         seed=$SEED \
         hydra.run.dir="${RESULTS_DIR}/seed_${SEED}" \
+        trainer.resume=auto \
         "$@"

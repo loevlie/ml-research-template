@@ -47,8 +47,7 @@ class Objective(Protocol):
     works as an Objective.
     """
 
-    def __call__(self, model: nn.Module, batch: Any) -> dict[str, Any]:
-        ...
+    def __call__(self, model: nn.Module, batch: Any) -> dict[str, Any]: ...
 
 
 class SupervisedObjective:
@@ -70,3 +69,39 @@ class SupervisedObjective:
         logits = model(x)
         loss = F.cross_entropy(logits, y, label_smoothing=self.label_smoothing)
         return {"loss": loss, "logits": logits, "targets": y}
+
+
+class ContrastiveObjective:
+    """Symmetric InfoNCE (CLIP-style) over paired views.
+
+    Works for two modalities (image/text) or two augmented views of one
+    modality (SimCLR-style tabular/image SSL). Expects:
+
+      - batch: a pair ``(x_a, x_b)`` where row i of x_a matches row i of x_b
+      - model: callable as ``model(x_a, x_b) -> (z_a, z_b)``, two [B, D]
+        embedding tensors (e.g. a two-tower module)
+
+    Pair with a DataLoader that yields view pairs (see data/augmentations.py).
+
+    Args:
+        temperature: Softmax temperature for the similarity logits.
+    """
+
+    def __init__(self, temperature: float = 0.07) -> None:
+        self.temperature = temperature
+
+    def __call__(
+        self,
+        model: nn.Module,
+        batch: tuple[torch.Tensor, torch.Tensor],
+    ) -> dict[str, Any]:
+        x_a, x_b = batch
+        z_a, z_b = model(x_a, x_b)
+        z_a = F.normalize(z_a, dim=-1)
+        z_b = F.normalize(z_b, dim=-1)
+
+        logits = (z_a @ z_b.T) / self.temperature
+        targets = torch.arange(logits.size(0), device=logits.device)
+        loss = (F.cross_entropy(logits, targets) + F.cross_entropy(logits.T, targets)) / 2
+        # No "logits"/"targets" keys: classification accuracy doesn't apply.
+        return {"loss": loss}

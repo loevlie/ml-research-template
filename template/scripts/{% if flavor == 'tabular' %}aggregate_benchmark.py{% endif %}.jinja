@@ -1,0 +1,77 @@
+"""Aggregate a benchmark grid into per-dataset tables + paired tests.
+
+Reads metrics.json files written by benchmark.py from the layout
+``<results_dir>/<estimator>/task_<id>/fold_<k>/metrics.json``.
+
+Usage:
+    python scripts/aggregate_benchmark.py outputs/benchmark_20260611_120000
+    python scripts/aggregate_benchmark.py outputs/benchmark_123456 \
+        --metric balanced_acc --baseline logreg
+"""
+
+import argparse
+import json
+from pathlib import Path
+
+import pandas as pd
+
+from {{ package_name }}.utils.stats import paired_significance_test, report_results
+
+
+def load_cells(results_dir: Path) -> pd.DataFrame:
+    """Load every metrics.json under results_dir into one long-format frame."""
+    rows = []
+    for metrics_file in sorted(results_dir.glob("*/task_*/fold_*/metrics.json")):
+        estimator = metrics_file.relative_to(results_dir).parts[0]
+        with open(metrics_file) as f:
+            rows.append({"estimator": estimator, **json.load(f)})
+    return pd.DataFrame(rows)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Aggregate benchmark grid results")
+    parser.add_argument("results_dir", type=Path, help="Directory written by *_benchmark.sh")
+    parser.add_argument("--metric", default="acc", help="Metric column to aggregate")
+    parser.add_argument("--baseline", default=None, help="Estimator name to compare others against")
+    args = parser.parse_args()
+
+    df = load_cells(args.results_dir)
+    if df.empty:
+        print(f"No metrics.json files found under {args.results_dir}")
+        return
+
+    # Per-dataset: mean +/- std over folds, one column per estimator.
+    per_task = df.groupby(["dataset", "estimator"])[args.metric].agg(["mean", "std", "count"])
+    table = per_task["mean"].unstack("estimator")
+    print(f"\n=== {args.metric} (mean over folds) ===")
+    print(table.round(4).to_string())
+
+    # Mean rank across datasets (1 = best) — the standard cross-dataset summary.
+    ranks = table.rank(axis=1, ascending=False)
+    print("\n=== Mean rank across datasets (lower is better) ===")
+    print(ranks.mean().round(3).sort_values().to_string())
+
+    if args.baseline:
+        if args.baseline not in table.columns:
+            print(f"\nBaseline {args.baseline!r} not in results ({list(table.columns)})")
+            return
+        for estimator in table.columns:
+            if estimator == args.baseline:
+                continue
+            paired = table[[estimator, args.baseline]].dropna()
+            if len(paired) < 3:
+                print(f"\n{estimator}: only {len(paired)} shared datasets — skipping test.")
+                continue
+            wins = (paired[estimator] > paired[args.baseline]).mean()
+            print(f"\n--- {estimator} vs {args.baseline} ({len(paired)} datasets) ---")
+            print(f"Win rate: {wins:.0%}")
+            result = paired_significance_test(list(paired[estimator]), list(paired[args.baseline]))
+            print(report_results(result))
+
+    out_csv = args.results_dir / f"summary_{args.metric}.csv"
+    table.to_csv(out_csv)
+    print(f"\nSaved per-dataset table to {out_csv}")
+
+
+if __name__ == "__main__":
+    main()

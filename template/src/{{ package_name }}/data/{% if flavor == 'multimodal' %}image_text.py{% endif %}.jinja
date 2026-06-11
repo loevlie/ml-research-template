@@ -1,0 +1,86 @@
+"""Image-text dataloading skeleton (HF datasets + open_clip preprocessing).
+
+Pairs with ContrastiveObjective (configs/loss/contrastive.yaml): batches are
+(images, token_ids) and a two-tower model returns the two embeddings.
+
+Data-loading escalation path — start simple, move only when it hurts:
+  1. HF `datasets` (this file): fine up to a few hundred GB with streaming.
+  2. LitData or MosaicML StreamingDataset: cloud-resident shards, fast
+     random access, deterministic mid-epoch resume for big pretraining runs.
+  3. WebDataset tar shards: the most interoperable archival format.
+"""
+
+from collections.abc import Callable
+
+import torch
+from torch.utils.data import DataLoader
+
+from {{ package_name }}.utils.seed import seed_worker
+
+
+def build_clip_transforms(model_name: str = "ViT-B-32", pretrained: str = "openai"):
+    """Image preprocess + tokenizer matching an open_clip model's pretraining."""
+    import open_clip
+
+    _, _, preprocess = open_clip.create_model_and_transforms(model_name, pretrained=pretrained)
+    tokenizer = open_clip.get_tokenizer(model_name)
+    return preprocess, tokenizer
+
+
+def create_image_text_dataloader(
+    dataset_name: str = "nlphuji/flickr30k",
+    split: str = "test",
+    image_column: str = "image",
+    text_column: str = "caption",
+    batch_size: int = 64,
+    num_workers: int = 4,
+    streaming: bool = False,
+    preprocess: Callable | None = None,
+    tokenizer: Callable | None = None,
+    seed: int = 42,
+) -> DataLoader:
+    """DataLoader yielding (images [B,3,H,W], token_ids [B,L]) pairs.
+
+    Args:
+        dataset_name: Any HF hub dataset with an image and a text column.
+        split: Dataset split to load.
+        image_column: Column holding PIL images.
+        text_column: Column holding captions (str or list[str]; first is used).
+        batch_size: Batch size.
+        num_workers: DataLoader workers.
+        streaming: Stream from the hub instead of downloading (no shuffling
+            buffer configured here — add one for real training).
+        preprocess: Image transform; defaults to the ViT-B/32 CLIP transform.
+        tokenizer: Text tokenizer; defaults to the matching open_clip tokenizer.
+        seed: Worker seeding for reproducibility.
+    """
+    from datasets import load_dataset
+
+    if preprocess is None or tokenizer is None:
+        default_preprocess, default_tokenizer = build_clip_transforms()
+        preprocess = preprocess or default_preprocess
+        tokenizer = tokenizer or default_tokenizer
+
+    dataset = load_dataset(dataset_name, split=split, streaming=streaming)
+
+    def collate(examples: list[dict]) -> tuple[torch.Tensor, torch.Tensor]:
+        images = torch.stack([preprocess(ex[image_column]) for ex in examples])
+        captions = [
+            ex[text_column][0] if isinstance(ex[text_column], list) else ex[text_column]
+            for ex in examples
+        ]
+        token_ids = tokenizer(captions)
+        return images, token_ids
+
+    g = torch.Generator().manual_seed(seed)
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=not streaming,
+        num_workers=num_workers,
+        collate_fn=collate,
+        worker_init_fn=seed_worker,
+        generator=g,
+        pin_memory=True,
+        persistent_workers=num_workers > 0,
+    )

@@ -1,0 +1,3 @@
+# TabICL foundation-model baseline (fully open: weights + pretraining code).
+# Needs: uv sync --extra tabular-baselines
+_target_: tabicl.TabICLClassifier

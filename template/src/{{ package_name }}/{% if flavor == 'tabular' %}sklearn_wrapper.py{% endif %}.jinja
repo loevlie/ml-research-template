@@ -1,0 +1,110 @@
+"""sklearn-estimator wrapper for torch models.
+
+The sklearn interface (fit/predict/predict_proba, get_params/set_params) is
+how tabular models get adopted — TabPFN and TabICL both ship one. Wrapping
+your model this way makes it a drop-in for the benchmark harness
+(benchmark.py), sklearn pipelines/CV, and other people's eval code.
+
+Conventions that matter (sklearn's contract):
+  - ``__init__`` stores constructor args verbatim — no validation, no derived
+    state. That's what makes ``clone()`` and grid search work.
+  - All fitted state ends in trailing-underscore attributes (``model_``,
+    ``classes_``) set in ``fit``.
+Run ``sklearn.utils.estimator_checks.check_estimator`` for the full gauntlet
+before releasing a model.
+"""
+
+import numpy as np
+import torch
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.preprocessing import LabelEncoder
+from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
+
+from {{ package_name }}.models.module import ExampleModel
+from {{ package_name }}.utils.seed import set_seed
+
+
+class TorchMLPClassifier(BaseEstimator, ClassifierMixin):
+    """ExampleModel behind an sklearn-style estimator interface.
+
+    Replace ``ExampleModel`` with your architecture; the interface stays.
+
+    Args:
+        hidden_dim: Hidden layer width.
+        lr: Adam learning rate.
+        max_epochs: Full passes over the training data.
+        batch_size: Minibatch size.
+        weight_decay: Adam weight decay.
+        device: "auto" picks CUDA when available.
+        random_state: Seed for weight init and batch shuffling.
+    """
+
+    def __init__(
+        self,
+        hidden_dim: int = 128,
+        lr: float = 1e-3,
+        max_epochs: int = 50,
+        batch_size: int = 256,
+        weight_decay: float = 0.0,
+        device: str = "auto",
+        random_state: int = 0,
+    ) -> None:
+        self.hidden_dim = hidden_dim
+        self.lr = lr
+        self.max_epochs = max_epochs
+        self.batch_size = batch_size
+        self.weight_decay = weight_decay
+        self.device = device
+        self.random_state = random_state
+
+    def _resolve_device(self) -> torch.device:
+        if self.device == "auto":
+            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        return torch.device(self.device)
+
+    def fit(self, X: np.ndarray, y: np.ndarray) -> "TorchMLPClassifier":
+        X, y = check_X_y(X, y)
+        set_seed(self.random_state, deterministic=False)
+        device = self._resolve_device()
+
+        self._label_encoder_ = LabelEncoder().fit(y)
+        self.classes_ = self._label_encoder_.classes_
+        self.n_features_in_ = X.shape[1]
+
+        X_t = torch.as_tensor(X, dtype=torch.float32)
+        y_t = torch.as_tensor(self._label_encoder_.transform(y), dtype=torch.long)
+
+        model = ExampleModel(
+            n_features=self.n_features_in_,
+            hidden_dim=self.hidden_dim,
+            n_classes=len(self.classes_),
+        ).to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
+        model.train()
+        generator = torch.Generator().manual_seed(self.random_state)
+        for _ in range(self.max_epochs):
+            for idx in torch.randperm(len(X_t), generator=generator).split(self.batch_size):
+                xb, yb = X_t[idx].to(device), y_t[idx].to(device)
+                optimizer.zero_grad()
+                loss = torch.nn.functional.cross_entropy(model(xb), yb)
+                loss.backward()
+                optimizer.step()
+
+        self.model_ = model.eval()
+        return self
+
+    @torch.no_grad()
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        check_is_fitted(self)
+        X = check_array(X)
+        device = next(self.model_.parameters()).device
+        probs = []
+        X_t = torch.as_tensor(np.asarray(X), dtype=torch.float32)
+        for xb in X_t.split(self.batch_size):
+            logits = self.model_(xb.to(device))
+            probs.append(torch.softmax(logits, dim=-1).cpu().numpy())
+        return np.concatenate(probs)
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        return np.asarray(self.classes_[self.predict_proba(X).argmax(axis=1)])

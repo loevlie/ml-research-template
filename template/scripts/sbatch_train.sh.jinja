@@ -6,8 +6,12 @@
 #   sbatch scripts/sbatch_train.sh experiment=example        # forward to train.py
 #   sbatch scripts/sbatch_train.sh model.lr=1e-3 seed=123
 #
-# Preemption: --signal=B:USR1@90 sends SIGUSR1 90s before walltime. Lightning's
-# SLURMEnvironment(auto_requeue=True) catches it, checkpoints, and requeues.
+# Preemption: --requeue + a stable run dir keyed to the job ID mean a requeued
+# job lands in the same outputs/ directory, and trainer.resume=auto picks up
+# last.ckpt (saved every epoch) — training continues from the last finished
+# epoch. --signal=B:USR1@90 additionally sends SIGUSR1 90s before walltime if
+# you want to wire Lightning's SLURMEnvironment(auto_requeue=True) for
+# mid-epoch checkpointing.
 #
 # Fill in for your cluster before first use (or pass via --partition/--account):
 # #SBATCH --partition=gpu
@@ -37,4 +41,7 @@ source .venv/bin/activate
 srun torchrun \
     --standalone \
     --nproc_per_node=${SLURM_GPUS_ON_NODE:-1} \
-    src/{{ package_name }}/train.py "$@"
+    src/{{ package_name }}/train.py \
+        hydra.run.dir="outputs/slurm_${SLURM_JOB_ID}" \
+        trainer.resume=auto \
+        "$@"

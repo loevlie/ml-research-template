@@ -1,0 +1,87 @@
+"""One benchmark cell: fit one estimator on one OpenML (task, fold), save metrics.
+
+Tabular-FM evaluation is many small jobs, not one big training run. This entry
+point is the unit of work; the grid lives in scripts/run_benchmark.sh (local)
+and scripts/sbatch_benchmark.sh (SLURM array). Aggregate with
+scripts/aggregate_benchmark.py.
+
+Usage:
+    python src/{{ package_name }}/benchmark.py                                # defaults
+    python src/{{ package_name }}/benchmark.py estimator=tabpfn task_id=3913 fold=2
+"""
+
+import json
+import time
+from pathlib import Path
+
+import hydra
+import numpy as np
+from omegaconf import DictConfig
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, log_loss, roc_auc_score
+
+from {{ package_name }}.data.openml_data import load_openml_task
+from {{ package_name }}.utils.seed import set_seed
+
+
+@hydra.main(version_base="1.3", config_path="../../configs", config_name="benchmark")
+def main(cfg: DictConfig) -> float:
+    """Run one (estimator, task, fold) cell and write metrics.json.
+
+    Returns:
+        Test accuracy (for Hydra sweepers).
+    """
+    set_seed(cfg.seed, deterministic=False)
+    output_dir = Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)  # type: ignore[attr-defined]
+
+    split = load_openml_task(cfg.task_id, fold=cfg.fold)
+    estimator = hydra.utils.instantiate(cfg.estimator)
+
+    t0 = time.perf_counter()
+    estimator.fit(split.X_train, split.y_train)
+    fit_seconds = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    y_pred = estimator.predict(split.X_test)
+    predict_seconds = time.perf_counter() - t0
+
+    metrics: dict = {
+        "task_id": split.task_id,
+        "dataset": split.dataset_name,
+        "fold": split.fold,
+        "seed": cfg.seed,
+        "n_train": len(split.y_train),
+        "n_test": len(split.y_test),
+        "n_classes": split.n_classes,
+        "acc": float(accuracy_score(split.y_test, y_pred)),
+        "balanced_acc": float(balanced_accuracy_score(split.y_test, y_pred)),
+        "fit_seconds": fit_seconds,
+        "predict_seconds": predict_seconds,
+    }
+
+    if hasattr(estimator, "predict_proba"):
+        proba = np.asarray(estimator.predict_proba(split.X_test))
+        labels = list(range(split.n_classes))
+        metrics["log_loss"] = float(log_loss(split.y_test, proba, labels=labels))
+        try:
+            if split.n_classes == 2:
+                metrics["roc_auc"] = float(roc_auc_score(split.y_test, proba[:, 1]))
+            else:
+                metrics["roc_auc"] = float(
+                    roc_auc_score(split.y_test, proba, multi_class="ovr", labels=labels)
+                )
+        except ValueError:
+            pass  # e.g. a class missing from this test fold
+
+    with open(output_dir / "metrics.json", "w") as f:
+        json.dump(metrics, f, indent=2)
+
+    print(
+        f"{split.dataset_name} (task {split.task_id}, fold {split.fold}): "
+        f"acc={metrics['acc']:.4f} balanced_acc={metrics['balanced_acc']:.4f} "
+        f"fit={fit_seconds:.1f}s"
+    )
+    return float(metrics["acc"])
+
+
+if __name__ == "__main__":
+    main()

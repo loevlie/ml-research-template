@@ -1,0 +1,69 @@
+site_name: ml-research-template
+site_description: >-
+  A Copier template for ML research projects — PyTorch + Lightning Fabric +
+  Hydra + uv, with multi-seed significance testing and copier update baked in.
+site_url: https://loevlie.github.io/ml-research-template/
+repo_url: https://github.com/loevlie/ml-research-template
+repo_name: loevlie/ml-research-template
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/flask-outline
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  features:
+    - navigation.sections
+    - navigation.instant
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - The stack (and why): stack.md
+  - Workflows:
+      - Train & experiment: workflows/training.md
+      - Configure with Hydra: workflows/configs.md
+      - Sweeps & HP search: workflows/sweeps.md
+      - Run on SLURM: workflows/slurm.md
+      - Checkpoints & resume: workflows/resume-checkpointing.md
+      - Multi-seed statistics: workflows/multi-seed-stats.md
+      - Experiment tracking: workflows/tracking.md
+      - Tabular benchmarking: workflows/tabular-benchmarking.md
+      - Multimodal: workflows/multimodal.md
+  - Updating projects: updating.md

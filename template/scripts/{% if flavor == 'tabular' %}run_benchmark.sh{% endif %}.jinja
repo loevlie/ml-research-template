@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Local benchmark grid: estimator x OpenML task x fold, run sequentially.
+# For parallel execution on SLURM, use scripts/sbatch_benchmark.sh.
+#
+# Usage:
+#   bash scripts/run_benchmark.sh                    # default grid below
+#   bash scripts/run_benchmark.sh seed=123           # extra args forwarded to benchmark.py
+#
+# Then: python scripts/aggregate_benchmark.py outputs/benchmark_<stamp>
+
+set -euo pipefail
+
+# --- Grid (keep in sync with sbatch_benchmark.sh) ---
+ESTIMATORS=(logreg mlp)
+TASKS=(31 3913 9952)   # small CC18 tasks; print full suites with
+                       # python -c "from {{ package_name }}.data.openml_data import tasks_in_suite; print(tasks_in_suite())"
+FOLDS=(0 1 2 3 4)
+
+RESULTS_DIR="outputs/benchmark_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$RESULTS_DIR"
+
+{% raw -%}
+N_CELLS=$(( ${#ESTIMATORS[@]} * ${#TASKS[@]} * ${#FOLDS[@]} ))
+echo "=== Benchmark grid: ${#ESTIMATORS[@]} estimators x ${#TASKS[@]} tasks x ${#FOLDS[@]} folds = ${N_CELLS} cells ==="
+{%- endraw %}
+
+if command -v sbatch >/dev/null 2>&1 && [ -z "${SLURM_JOB_ID:-}" ]; then
+    echo "Hint: sbatch is available — scripts/sbatch_benchmark.sh runs this grid in parallel."
+fi
+
+for est in "${ESTIMATORS[@]}"; do
+    for task in "${TASKS[@]}"; do
+        for fold in "${FOLDS[@]}"; do
+            echo ">>> ${est} / task ${task} / fold ${fold}"
+            python src/{{ package_name }}/benchmark.py \
+                estimator="$est" task_id="$task" fold="$fold" \
+                hydra.run.dir="${RESULTS_DIR}/${est}/task_${task}/fold_${fold}" \
+                "$@"
+        done
+    done
+done
+
+echo ""
+echo "=== Done. Aggregate with: python scripts/aggregate_benchmark.py ${RESULTS_DIR} ==="

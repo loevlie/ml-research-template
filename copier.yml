@@ -10,6 +10,18 @@ _message_after_copy: |
     uv sync --extra dev
     uv run pre-commit install
     uv run python src/{{ package_name }}/train.py
+  {%- if flavor == "tabular" %}
+
+  Tabular flavor:
+    uv run python src/{{ package_name }}/benchmark.py            # one estimator x task x fold cell
+    bash scripts/run_benchmark.sh                                # local grid
+    uv sync --extra tabular-baselines                            # TabPFN + TabICL (TabPFN weights: non-commercial)
+  {%- endif %}
+  {%- if flavor == "multimodal" %}
+
+  Multimodal flavor:
+    see src/{{ package_name }}/data/image_text.py and configs/loss/contrastive.yaml
+  {%- endif %}
 
 _message_after_update: |
   Project "{{ project_name }}" updated to template v{{ _copier_conf.vcs_ref_hash }}
@@ -20,11 +32,17 @@ _skip_if_exists:
   - "src/{{ package_name }}/models/module.py"
   - "src/{{ package_name }}/data/datamodule.py"
   - "src/{{ package_name }}/data/augmentations.py"
+  - "src/{{ package_name }}/data/openml_data.py"
+  - "src/{{ package_name }}/data/image_text.py"
   - "src/{{ package_name }}/objectives.py"
+  - "src/{{ package_name }}/sklearn_wrapper.py"
   - "configs/experiment/example.yaml"
   - "configs/data/default.yaml"
   - "configs/model/default.yaml"
   - "configs/loss/supervised.yaml"
+  - "configs/loss/contrastive.yaml"
+  - "configs/estimator/*.yaml"
+  - "configs/benchmark.yaml"
   - "README.md"
 
 _exclude:
@@ -106,16 +124,29 @@ cuda_version:
 logger:
   type: str
   help: >-
-    Default experiment tracker. wandb = best UI + cloud sharing (needs account);
-    aim = best local UI (no account, fully offline); tensorboard = universal but
-    basic; csv = zero-dep flat files. All four are always installable — this
-    just picks the default for new runs.
+    Default experiment tracker. wandb = best UI + cloud sharing (needs account;
+    free academic tier); trackio = local-first wandb-compatible tracker from HF
+    (no account); tensorboard = universal but basic; csv = zero-dep flat files.
+    All four are always installable — this just picks the default for new runs.
   choices:
     - "wandb"
-    - "aim"
+    - "trackio"
     - "tensorboard"
     - "csv"
   default: "wandb"
+
+flavor:
+  type: str
+  help: >-
+    Domain scaffolding. generic = none; tabular = OpenML task loading,
+    an sklearn-estimator wrapper, and an estimator x task x fold benchmark
+    harness (tabular foundation models); multimodal = timm/open_clip/
+    transformers/datasets deps and an image-text dataloader skeleton.
+  choices:
+    - "generic"
+    - "tabular"
+    - "multimodal"
+  default: "generic"
 
 include_example:
   type: bool

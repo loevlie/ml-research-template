@@ -22,6 +22,9 @@ def train_epoch(
     objective: Any,
     train_loader: DataLoader,
     epoch: int,
+    scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,
+    accumulate_grad_batches: int = 1,
+    gradient_clip_val: float | None = 1.0,
 ) -> float:
     """Run one training epoch.
 
@@ -32,6 +35,11 @@ def train_epoch(
         objective: Any callable with signature (model, batch) -> dict containing "loss".
         train_loader: Training dataloader (already wrapped by Fabric).
         epoch: Current epoch number.
+        scheduler: Optional per-step LR scheduler (see utils/schedulers.py).
+        accumulate_grad_batches: Step the optimizer once every N batches,
+            scaling each loss by 1/N — emulates an N-times larger batch size.
+        gradient_clip_val: Max gradient norm before each optimizer step;
+            None or 0 disables clipping.
 
     Returns:
         Average training loss for the epoch.
@@ -39,20 +47,40 @@ def train_epoch(
     model.train()
     total_loss = 0.0
     n_batches = 0
+    grad_norm: float | None = None
 
+    optimizer.zero_grad()
     for batch_idx, batch in enumerate(train_loader):
-        optimizer.zero_grad()
+        # Step at the end of each accumulation window and on the final batch.
+        is_step_batch = (batch_idx + 1) % accumulate_grad_batches == 0 or (batch_idx + 1) == len(
+            train_loader
+        )
+
         out = objective(model, batch)
         loss = out["loss"]
-        fabric.backward(loss)
-        fabric.clip_gradients(model, optimizer, max_norm=1.0)
-        optimizer.step()
+        # Skip DDP gradient sync on non-step batches — it would be wasted traffic.
+        with fabric.no_backward_sync(model, enabled=not is_step_batch):  # type: ignore[arg-type]
+            fabric.backward(loss / accumulate_grad_batches)
+
+        if is_step_batch:
+            if gradient_clip_val:
+                # clip_gradients returns the pre-clip total norm — log it below.
+                norm = fabric.clip_gradients(model, optimizer, max_norm=gradient_clip_val)
+                grad_norm = float(norm) if norm is not None else None
+            optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
+            optimizer.zero_grad()
 
         total_loss += loss.item()
         n_batches += 1
 
         if batch_idx % 10 == 0:
-            fabric.log("train/loss_step", loss.item(), step=epoch * len(train_loader) + batch_idx)
+            global_step = epoch * len(train_loader) + batch_idx
+            fabric.log("train/loss_step", loss.item(), step=global_step)
+            fabric.log("train/lr", optimizer.param_groups[0]["lr"], step=global_step)
+            if grad_norm is not None:
+                fabric.log("train/grad_norm", grad_norm, step=global_step)
 
     avg_loss = total_loss / n_batches
     fabric.log("train/loss_epoch", avg_loss, step=epoch)

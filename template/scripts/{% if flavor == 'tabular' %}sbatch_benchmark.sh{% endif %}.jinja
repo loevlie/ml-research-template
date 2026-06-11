@@ -1,0 +1,53 @@
+#!/bin/bash
+# Benchmark grid as a SLURM array: one (estimator, task, fold) cell per task.
+# Tabular-FM evals are many small jobs — arrays fit them perfectly.
+#
+# Usage:
+#   1. Edit the grid below, set --array=0-(N_CELLS-1).
+#   2. sbatch scripts/sbatch_benchmark.sh
+#   3. python scripts/aggregate_benchmark.py outputs/benchmark_<jobid>
+#
+# Cells are CPU-sized by default — most tabular baselines don't need a GPU.
+# For GPU estimators (TabPFN on big tasks), add: #SBATCH --gpus-per-node=1
+#
+# Fill in for your cluster:
+# #SBATCH --partition=cpu
+# #SBATCH --account=YOURACCOUNT
+
+#SBATCH --job-name={{ package_name }}-bench
+#SBATCH --array=0-29
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=01:00:00
+#SBATCH --requeue
+#SBATCH --output=logs/slurm-%A_%a.out
+#SBATCH --error=logs/slurm-%A_%a.err
+
+set -euo pipefail
+mkdir -p logs
+
+source .venv/bin/activate
+
+# --- Grid (keep in sync with run_benchmark.sh; array size = product) ---
+ESTIMATORS=(logreg mlp)
+TASKS=(31 3913 9952)
+FOLDS=(0 1 2 3 4)
+
+{% raw -%}
+N_TASKS=${#TASKS[@]}
+N_FOLDS=${#FOLDS[@]}
+{%- endraw %}
+
+i=$SLURM_ARRAY_TASK_ID
+EST=${ESTIMATORS[$(( i / (N_TASKS * N_FOLDS) ))]}
+TASK=${TASKS[$(( (i / N_FOLDS) % N_TASKS ))]}
+FOLD=${FOLDS[$(( i % N_FOLDS ))]}
+
+RESULTS_DIR="outputs/benchmark_${SLURM_ARRAY_JOB_ID}"
+
+srun python src/{{ package_name }}/benchmark.py \
+    estimator="$EST" task_id="$TASK" fold="$FOLD" \
+    hydra.run.dir="${RESULTS_DIR}/${EST}/task_${TASK}/fold_${FOLD}" \
+    "$@"

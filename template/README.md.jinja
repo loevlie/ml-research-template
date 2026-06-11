@@ -27,8 +27,8 @@ uv sync --extra dev
 uv run pre-commit install
 
 # Optional: extra tracking backends
-uv sync --extra tracking-wandb   # W&B (cloud)
-uv sync --extra tracking-aim     # Aim (local, rich UI)
+uv sync --extra tracking-wandb     # W&B (cloud)
+uv sync --extra tracking-trackio   # trackio (local-first, wandb-compatible)
 
 # Optional: publication-ready statistics
 uv sync --extra stats            # pingouin
@@ -64,8 +64,8 @@ uv run python src/{{ package_name }}/eval.py ckpt_path=/path/to/checkpoint.ckpt
 uv run python src/{{ package_name }}/train.py -m hparams_search=optuna
 
 # Switch logger via config ({{ logger }} is default)
-uv run python src/{{ package_name }}/train.py logger=wandb          # cloud — needs: uv sync --extra tracking-wandb
-uv run python src/{{ package_name }}/train.py logger=aim             # local — needs: uv sync --extra tracking-aim
+uv run python src/{{ package_name }}/train.py logger=wandb           # cloud — needs: uv sync --extra tracking-wandb
+uv run python src/{{ package_name }}/train.py logger=trackio         # local — needs: uv sync --extra tracking-trackio
 uv run python src/{{ package_name }}/train.py logger=tensorboard     # local
 uv run python src/{{ package_name }}/train.py logger=csv             # local, zero dependencies
 ```
@@ -151,6 +151,42 @@ The same pattern covers masked-column prediction (BERT-for-tables), next-state (
 
 Per-sample augmentations go in `src/{{ package_name }}/data/augmentations.py`; batch-level augs (e.g., MixUp) belong in a custom `collate_fn` or inside the objective.
 
+{% if flavor == "tabular" -%}
+## Tabular benchmarking
+
+Tabular-FM evaluation is many small (estimator × OpenML task × fold) cells, not one big run:
+
+```bash
+# One cell
+uv run python src/{{ package_name }}/benchmark.py estimator=mlp task_id=31 fold=0
+
+# Full grid — locally, or as a SLURM array (edit the grid in the script)
+bash scripts/run_benchmark.sh
+sbatch scripts/sbatch_benchmark.sh
+
+# Per-dataset table, mean ranks, win rates + paired Wilcoxon vs a baseline
+uv run python scripts/aggregate_benchmark.py outputs/benchmark_<stamp> --baseline logreg
+
+# Foundation-model baselines (TabPFN weights: non-commercial research only)
+uv sync --extra tabular-baselines
+uv run python src/{{ package_name }}/benchmark.py estimator=tabpfn
+```
+
+Ship your own models behind the sklearn interface (`src/{{ package_name }}/sklearn_wrapper.py`) — that's how TabPFN/TabICL get adopted, and it makes them drop-ins for this harness and everyone else's.
+
+{% endif -%}
+{% if flavor == "multimodal" -%}
+## Multimodal
+
+`src/{{ package_name }}/data/image_text.py` builds (image, token_ids) loaders from any HF hub dataset with CLIP-matched preprocessing, and pairs with the CLIP-style objective:
+
+```bash
+uv run python src/{{ package_name }}/train.py loss=contrastive
+```
+
+Data-loading escalation path: HF `datasets` → LitData / MosaicML streaming (cloud shards, mid-epoch resume) → WebDataset (archival interop). Start at step 1; move only when it hurts.
+
+{% endif -%}
 ## Running on SLURM
 
 This template ships two complementary SLURM paths. Pick whichever fits.
@@ -203,7 +239,7 @@ The sbatch scripts use `--signal=B:USR1@90` — SIGUSR1 90s before walltime. Wir
 |------|---------|
 | [Lightning Fabric](https://lightning.ai/docs/fabric/) | Multi-GPU, mixed precision — no hidden training loop |
 | [Hydra](https://hydra.cc/) | Config management + CLI overrides |
-| [TensorBoard](https://www.tensorflow.org/tensorboard) / [W&B](https://wandb.ai/) / [Aim](https://aimstack.io/) | Experiment tracking (switchable) |
+| [W&B](https://wandb.ai/) / [trackio](https://github.com/gradio-app/trackio) / [TensorBoard](https://www.tensorflow.org/tensorboard) | Experiment tracking (switchable) |
 | [jaxtyping](https://github.com/patrick-kidger/jaxtyping) + [beartype](https://github.com/beartype/beartype) | Runtime shape checking |
 | [Ruff](https://github.com/astral-sh/ruff) | Linting + formatting |
 | [uv](https://docs.astral.sh/uv/) | Package management |
