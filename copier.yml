@@ -115,9 +115,23 @@ python_version:
     - "3.12"
   default: "3.11"
 
+framework:
+  type: str
+  help: >-
+    Deep learning library. pytorch = full ecosystem, all flavors; jax = flax
+    NNX + optax (single-device jit loop, generic flavor only — the tabular and
+    multimodal scaffolding builds on PyTorch libraries). Configs, CLI, sweeps,
+    SLURM, and stats are identical either way.
+  choices:
+    - "pytorch"
+    - "jax"
+  default: "pytorch"
+
 cuda_version:
   type: str
-  help: "CUDA version for PyTorch on Linux (cpu = CPU-only; on macOS torch uses wheels automatically)."
+  help: >-
+    CUDA version on Linux (cpu = CPU-only; macOS picks wheels automatically).
+    For jax, any CUDA choice installs jax[cuda12] on Linux.
   choices:
     - "cpu"
     - "cu118"
@@ -152,6 +166,7 @@ flavor:
     - "tabular"
     - "multimodal"
   default: "generic"
+  when: "{{ framework == 'pytorch' }}"
 
 include_example:
   type: bool

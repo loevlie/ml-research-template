@@ -1,0 +1,73 @@
+"""Example dataset and dataloader factory (numpy-based — no torch).
+
+This file is the data seam: `create_dataloaders(cfg, seed)` is all train.py
+and eval.py know about. To use your own data, replace the body (keep the
+signature) and add whatever fields you need to DataConfig in configs.py —
+both files are yours and are never overwritten by `copier update`.
+
+Batches are plain numpy arrays; JAX moves them to the accelerator at the jit
+boundary. For data too big for memory, swap this for grain or a tf.data
+pipeline — only this file changes.
+"""
+
+from dataclasses import dataclass
+
+import numpy as np
+
+from {{ package_name }}.configs import DataConfig
+
+
+class ArrayLoader:
+    """Minimal in-memory batch iterator with a seeded, per-epoch reshuffle."""
+
+    def __init__(
+        self, x: np.ndarray, y: np.ndarray, batch_size: int, *, shuffle: bool, seed: int
+    ) -> None:
+        self.x, self.y = x, y
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.rng = np.random.default_rng(seed)  # stateful: new permutation each epoch
+
+    def __len__(self) -> int:
+        return -(-len(self.x) // self.batch_size)  # ceil division
+
+    def __iter__(self):
+        order = self.rng.permutation(len(self.x)) if self.shuffle else np.arange(len(self.x))
+        for start in range(0, len(order), self.batch_size):
+            idx = order[start : start + self.batch_size]
+            yield self.x[idx], self.y[idx]
+
+
+@dataclass
+class DataLoaders:
+    """Train and val dataloaders."""
+
+    train: ArrayLoader
+    val: ArrayLoader
+
+
+def create_dataloaders(cfg: DataConfig, seed: int = 42) -> DataLoaders:
+    """Build train and val dataloaders from the data config — the data seam.
+
+    Replace the synthetic arrays below with your own; keep this signature so
+    train.py and eval.py never need editing. New knobs (paths, transforms,
+    splits) belong on DataConfig.
+
+    Args:
+        cfg: The data config block.
+        seed: Seed for data generation, the train/val split, and shuffling.
+
+    Returns:
+        DataLoaders with train and val loaders.
+    """
+    rng = np.random.default_rng(seed)
+    x = rng.normal(size=(cfg.n_samples, cfg.n_features)).astype(np.float32)
+    y = rng.integers(0, cfg.n_classes, size=cfg.n_samples).astype(np.int32)
+
+    n_val = int(cfg.n_samples * cfg.val_split)
+    split = rng.permutation(cfg.n_samples)  # seeded split, independent of epoch shuffling
+    val_idx, train_idx = split[:n_val], split[n_val:]
+
+    train = ArrayLoader(x[train_idx], y[train_idx], cfg.batch_size, shuffle=True, seed=seed)
+    val = ArrayLoader(x[val_idx], y[val_idx], cfg.batch_size, shuffle=False, seed=seed)
+    return DataLoaders(train=train, val=val)

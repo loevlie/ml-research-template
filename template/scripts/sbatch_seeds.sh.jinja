@@ -38,6 +38,7 @@ RESULTS_DIR="outputs/multi_seed_${SLURM_ARRAY_JOB_ID}"
 
 # The run dir is keyed to the array job ID, so a preempted+requeued task lands
 # in the same directory and trainer.resume=auto continues from last.ckpt.
+{%- if framework == 'pytorch' %}
 srun torchrun \
     --standalone \
     --nproc_per_node=${SLURM_GPUS_ON_NODE:-1} \
@@ -46,3 +47,11 @@ srun torchrun \
         run_dir="${RESULTS_DIR}/seed_${SEED}" \
         trainer.resume=auto \
         "$@"
+{%- else %}
+srun python \
+    src/{{ package_name }}/train.py \
+        seed=$SEED \
+        run_dir="${RESULTS_DIR}/seed_${SEED}" \
+        trainer.resume=auto \
+        "$@"
+{%- endif %}

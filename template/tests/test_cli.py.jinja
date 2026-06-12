@@ -79,27 +79,34 @@ def test_unknown_group_variant_exits():
 # ---- local.yaml ----
 
 
+{%- if framework == 'pytorch' %}
+{%- set knob, low, high = "num_workers", 0, 2 %}
+{%- else %}
+{%- set knob, low, high = "batch_size", 16, 32 %}
+{%- endif %}
+
+
 def test_local_yaml_merges_with_interpolation(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "configs").mkdir()
     (tmp_path / "configs" / "local.yaml").write_text(
-        "data:\n  num_workers: 0\nmodel:\n  hidden_dim: ${data.n_features}\n"
+        "data:\n  {{ knob }}: {{ low }}\nmodel:\n  hidden_dim: ${data.n_features}\n"
     )
     cfg = parse(["trainer.max_epochs=1"], local_yaml="configs/local.yaml")
-    assert cfg.data.num_workers == 0
+    assert cfg.data.{{ knob }} == {{ low }}
     assert cfg.model.hidden_dim == cfg.data.n_features
     # CLI still wins over local.yaml
-    cfg = parse(["data.num_workers=2"], local_yaml="configs/local.yaml")
-    assert cfg.data.num_workers == 2
+    cfg = parse(["data.{{ knob }}={{ high }}"], local_yaml="configs/local.yaml")
+    assert cfg.data.{{ knob }} == {{ high }}
 
 
 def test_local_yaml_applies_without_presets(tmp_path, monkeypatch):
     """eval.py-style entry points (required fields, no presets) honor local.yaml."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "configs").mkdir()
-    (tmp_path / "configs" / "local.yaml").write_text("data:\n  num_workers: 0\n")
+    (tmp_path / "configs" / "local.yaml").write_text("data:\n  {{ knob }}: {{ low }}\n")
     cfg = cli.parse(EvalConfig, argv=["ckpt_path=/tmp/x.ckpt"], local_yaml="configs/local.yaml")
-    assert cfg.data.num_workers == 0
+    assert cfg.data.{{ knob }} == {{ low }}
     assert cfg.ckpt_path == "/tmp/x.ckpt"
     with pytest.raises(SystemExit):  # required field still required
         cli.parse(EvalConfig, argv=[], local_yaml="configs/local.yaml")

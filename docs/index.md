@@ -9,7 +9,7 @@ hide:
 
 # Start every project ready to publish
 
-A Copier template for ML research — PyTorch + Lightning Fabric + typed configs + uv,
+A Copier template for ML research — PyTorch or JAX, typed configs, uv —
 with multi-seed significance testing and `copier update` baked in.
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
@@ -35,7 +35,8 @@ Answer ~10 prompts. Thirty seconds later you have a ready-to-train project: git 
 
     ~60 readable lines on Lightning Fabric — device placement, mixed precision,
     and DDP without a `Trainer` black box. Resume, LR scheduling, gradient
-    accumulation, and clipping are wired in and config-driven.
+    accumulation, and clipping are wired in and config-driven. Prefer JAX?
+    `framework=jax` swaps the core, keeps everything else.
 
     [:octicons-arrow-right-24: Train & experiment](workflows/training.md)
 

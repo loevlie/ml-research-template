@@ -30,7 +30,9 @@ class DataConfig(pydantic.BaseModel):
     n_features: int = 32
     n_classes: int = 10
     batch_size: int = 64
+{%- if framework == 'pytorch' %}
     num_workers: int = 4
+{%- endif %}
     val_split: float = 0.2
 
 
@@ -50,9 +52,11 @@ class SchedulerConfig(pydantic.BaseModel):
 
 
 class TrainerConfig(pydantic.BaseModel):
+{%- if framework == 'pytorch' %}
     accelerator: str = "auto"
     devices: int | Literal["auto"] = "auto"
     precision: Literal["32-true", "16-mixed", "bf16-mixed", "bf16-true", "64-true"] = "32-true"
+{%- endif %}
     max_epochs: int = 100
     patience: int = 10  # early stopping
     accumulate_grad_batches: int = 1  # optimizer steps once every N batches
@@ -90,6 +94,8 @@ class LoggerConfig(pydantic.BaseModel):
     kind: Literal["wandb", "trackio", "tensorboard", "csv"] = "{{ logger }}"
     project: str = "{{ package_name }}"
 
+{%- if framework == 'pytorch' %}
+
     def build(self, run_dir: Path):
         """Instantiate the Fabric logger for `kind` (imports stay lazy)."""
         if self.kind == "wandb":
@@ -118,6 +124,30 @@ class LoggerConfig(pydantic.BaseModel):
         from lightning.fabric.loggers import CSVLogger
 
         return CSVLogger(root_dir=str(run_dir), name="csv_logs")
+{%- else %}
+
+    def build(self, run_dir: Path):
+        """Instantiate the tracker adapter for `kind` (see utils/loggers.py)."""
+        from {{ package_name }}.utils import loggers
+
+        if self.kind == "wandb":
+            try:
+                return loggers.WandbLogger(project=self.project, run_dir=run_dir)
+            except ImportError as e:
+                raise ImportError(
+                    "logger.kind=wandb needs wandb — run: uv sync --extra tracking-wandb"
+                ) from e
+        if self.kind == "trackio":
+            try:
+                return loggers.TrackioLogger(project=self.project)
+            except ImportError as e:
+                raise ImportError(
+                    "logger.kind=trackio needs trackio — run: uv sync --extra tracking-trackio"
+                ) from e
+        if self.kind == "tensorboard":
+            return loggers.TensorBoardLogger(run_dir=run_dir)
+        return loggers.CsvLogger(run_dir=run_dir)
+{%- endif %}
 
 
 # --- root ---------------------------------------------------------------------
@@ -148,9 +178,11 @@ class EvalConfig(pydantic.BaseModel):
     seed: int = 42
     data: DataConfig = DataConfig()
     model: ModelConfig = ModelConfig()
+{%- if framework == 'pytorch' %}
     accelerator: str = "auto"
     devices: int | Literal["auto"] = "auto"
     precision: Literal["32-true", "16-mixed", "bf16-mixed", "bf16-true", "64-true"] = "32-true"
+{%- endif %}
 
     def resolved(self) -> "EvalConfig":
         cfg = self.model_copy(deep=True)

@@ -2,7 +2,7 @@
 
 # ml-research-template
 
-<p><i>A Copier template for ML research projects — PyTorch + Lightning Fabric + typed configs + uv,<br>with multi-seed significance testing and <code>copier update</code> baked in.</i></p>
+<p><i>A Copier template for ML research projects — PyTorch or JAX, typed configs, uv,<br>with multi-seed significance testing and <code>copier update</code> baked in.</i></p>
 
 [![docs](https://github.com/loevlie/ml-research-template/actions/workflows/docs.yml/badge.svg)](https://loevlie.github.io/ml-research-template/)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)
@@ -40,7 +40,7 @@ Answer ~10 prompts, get a ready-to-train project: git initialized, deps locked, 
 
 ## Why this template
 
-- ⚡ **Fabric, not Trainer.** An explicit training loop you can read and edit — with checkpoint resume, warmup+cosine LR scheduling, and gradient accumulation already wired in, config-driven. No callbacks, no hidden machinery.
+- ⚡ **Fabric, not Trainer.** An explicit training loop you can read and edit — with checkpoint resume, warmup+cosine LR scheduling, and gradient accumulation already wired in, config-driven. No callbacks, no hidden machinery. Prefer JAX? `-d framework=jax` generates a flax NNX + optax core with the same configs and commands.
 
 - ⚡ **Statistical rigor on day one.** Multi-seed launchers (local + SLURM array) and an aggregator with bootstrap CIs, paired Wilcoxon/t-tests, and Cohen's d. Publication-ready out of the box.
 

@@ -8,6 +8,7 @@ Every tool here was re-evaluated against the 2026 landscape. The table is the su
 | Config | **pydantic + tyro** (utils/cli.py) | Typed, IDE-checked configs with Hydra's CLI ergonomics kept |
 | Sweeps / SLURM | **submitit + optuna** (~150 lines of owned glue) | No frozen plugins; every line readable |
 | Training | **Lightning Fabric** (own loop) | Distributed/AMP plumbing without a Trainer black box |
+| Framework | **PyTorch** default, **JAX** optional | Ecosystem by default; XLA + explicit keys when a project wants them |
 | Caching | **exca + codever** (tabular) | Benchmark cells memoized, keyed to config *and* code version |
 | Tracking | **wandb** default, **trackio** local fallback | Best academic UX; a credible local escape hatch |
 | Shapes | **jaxtyping + beartype** | Runtime shape checks; bugs die at the first forward pass |
@@ -32,6 +33,19 @@ What Hydra's orchestration did is now ~150 lines of owned, readable glue: `scrip
 Research code in 2026 is mostly hand-written loops with a thin distributed layer (HF Accelerate or Fabric) underneath — frameworks with callback machinery fight you on custom objectives, multi-network updates, and `torch.compile`. Fabric gives device placement, mixed precision (`trainer.precision=bf16-mixed`), DDP, and checkpoint I/O while the loop stays ~75 readable lines in `training_loop.py`, with [resume, LR scheduling, gradient accumulation, and clipping](workflows/resume-checkpointing.md) config-driven.
 
 The `Objective` protocol (`objectives.py`) keeps the loop loss-agnostic: an objective is any callable `(model, batch) -> {"loss": ...}`, so supervised / contrastive / masked-prediction swap via `loss=<name>` without touching the loop.
+
+## PyTorch by default, JAX by choice
+
+PyTorch is the default because the ecosystems this template serves are
+PyTorch-shaped: tabular foundation models (TabPFN, TabICL), vision/text
+backbones (timm, open_clip, transformers), and the sklearn-adoption path all
+assume torch artifacts. But the orchestration layer — configs, CLI, sweeps,
+Optuna, SLURM, stats — never imports a framework, so `framework=jax` swaps
+just the training core: flax NNX model, optax optimizer (the LR schedule,
+clipping, and accumulation become optimizer composition instead of loop
+code), jitted steps, msgpack checkpoints. Worth choosing when the work is
+small-model/many-step, TPU-bound, or `vmap`-shaped (seed/ensemble
+parallelism); details in [JAX](workflows/jax.md).
 
 ## exca + codever (tabular flavor)
 

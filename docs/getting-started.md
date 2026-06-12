@@ -27,9 +27,10 @@ copier copy --trust gh:loevlie/ml-research-template my-project
 | `project_description` | generic | `pyproject.toml` + README |
 | `author_name` / `author_email` | — | LICENSE + pyproject authors |
 | `python_version` | `3.11` | Pins `.python-version`, `requires-python`, ruff/mypy targets |
-| `cuda_version` | `cu124` | PyTorch wheel index (`cpu`, `cu118`–`cu128`) via `[tool.uv.sources]` |
+| `framework` | `pytorch` | Deep learning library: `pytorch` or `jax` — see [JAX](workflows/jax.md) |
+| `cuda_version` | `cu124` | GPU wheel routing (`cpu`, `cu118`–`cu128`); for jax, any CUDA choice installs `jax[cuda12]` |
 | `logger` | `wandb` | Default tracker: `wandb`, `trackio`, `tensorboard`, `csv` — see [Tracking](workflows/tracking.md) |
-| `flavor` | `generic` | Domain scaffolding: `generic`, `tabular`, `multimodal` |
+| `flavor` | `generic` | Domain scaffolding: `generic`, `tabular`, `multimodal` (PyTorch only — skipped for jax) |
 | `include_example` | `true` | MLP reference example, smoke tests, demo, per-project docs |
 | `include_dennys_rules` | `false` | A research operating manual as `DENNYS_RULES.md` |
 
@@ -46,6 +47,8 @@ copier copy --trust gh:loevlie/ml-research-template my-project
 === "multimodal"
 
     Adds timm / open_clip / transformers / HF datasets as dependencies, an image-text dataloader with CLIP-matched preprocessing, and pairs with the CLIP-style contrastive objective. See [Multimodal](workflows/multimodal.md).
+
+The flavors build on PyTorch libraries. Choosing `framework=jax` gives you the generic project with a flax NNX + optax training core instead — same configs, same commands ([what changes](workflows/jax.md)).
 
 ## First training run
 

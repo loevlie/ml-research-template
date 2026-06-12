@@ -1,0 +1,81 @@
+"""Evaluation entry point (JAX).
+
+Usage:
+    python src/{{ package_name }}/eval.py ckpt_path=/path/to/best.ckpt
+
+The training run's config.yaml (next to the checkpoint) is read automatically,
+so data/model settings match training without re-specifying them; CLI
+overrides still win.
+"""
+
+import sys
+from pathlib import Path
+
+import yaml
+
+from {{ package_name }}.configs import DataConfig, EvalConfig, ModelConfig
+from {{ package_name }}.data.datamodule import create_dataloaders
+from {{ package_name }}.models.module import build_model
+from {{ package_name }}.objectives import SupervisedObjective
+from {{ package_name }}.training_loop import load_checkpoint, make_eval_step
+from {{ package_name }}.utils import cli
+from {{ package_name }}.utils.seed import set_seed
+
+
+def _default_from_run(argv: list[str]) -> EvalConfig | None:
+    """Reconstruct an EvalConfig from the training run's config snapshot."""
+    for token in argv:
+        if token.startswith("ckpt_path="):
+            ckpt_path = token.split("=", 1)[1]
+            snapshot_path = Path(ckpt_path).parent / "config.yaml"
+            if not snapshot_path.exists():
+                return None
+            train_cfg = (yaml.safe_load(snapshot_path.read_text()) or {}).get("config", {})
+            if not train_cfg:
+                return None
+            return EvalConfig(
+                ckpt_path=ckpt_path,
+                seed=train_cfg.get("seed", 42),
+                data=DataConfig(**train_cfg.get("data", {})),
+                model=ModelConfig(**train_cfg.get("model", {})),
+            )
+    return None
+
+
+def main() -> None:
+    """Evaluate a trained model checkpoint."""
+    default = _default_from_run(sys.argv[1:])
+    if default is not None:
+        print(f"eval: settings restored from {Path(default.ckpt_path).parent / 'config.yaml'}")
+    cfg = cli.parse(
+        EvalConfig,
+        presets={"base": default} if default is not None else None,
+        description="Evaluate a checkpoint (training config auto-restored when found).",
+    ).resolved()
+    set_seed(cfg.seed, deterministic=True)
+
+    # --- Data + Model (the same seams train.py uses) ---
+    loaders = create_dataloaders(cfg.data, seed=cfg.seed)
+    model = build_model(cfg.model, seed=cfg.seed)
+    load_checkpoint(Path(cfg.ckpt_path), model)  # model state only
+
+    # --- Evaluate ---
+    eval_step = make_eval_step(SupervisedObjective())
+    model.eval()
+    total_loss = 0.0
+    correct = 0
+    total = 0
+
+    for batch in loaders.val:
+        loss, c, t = eval_step(model, batch)
+        total_loss += float(loss)
+        correct += int(c)
+        total += int(t)
+
+    avg_loss = total_loss / len(loaders.val)
+    accuracy = correct / total if total > 0 else 0.0
+    print(f"Eval | loss={avg_loss:.4f} | acc={accuracy:.4f}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,176 @@
+"""Explicit training loop primitives (JAX / flax NNX).
+
+train.py orchestrates setup and invokes these. Keep them free of config
+parsing — they accept plain args so they're testable in isolation.
+
+The division of labor differs from a torch loop in one pleasant way: gradient
+clipping, accumulation, and the LR schedule are not loop code here — they live
+inside the optax chain built in train.py. The loop just computes grads and
+calls `optimizer.update`.
+
+One objective, one loop — swap objectives (supervised / contrastive / masked /
+next-state) via the config without touching this file.
+"""
+
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+import jax
+import jax.numpy as jnp
+import optax
+from flax import nnx, serialization
+
+# A train/eval step is created once per run (the objective is baked in via
+# closure) and jit-compiled on first call.
+TrainStep = Callable[..., tuple[jax.Array, jax.Array]]
+EvalStep = Callable[..., tuple[jax.Array, jax.Array, jax.Array]]
+
+
+def make_train_step(objective: Any) -> TrainStep:
+    """Build the jitted training step for one objective.
+
+    The step differentiates the objective's loss w.r.t. the model's params
+    and hands the gradients to the optax chain (which clips, accumulates,
+    schedules, and applies them — see train.py).
+    """
+
+    @nnx.jit
+    def train_step(model: nnx.Module, optimizer: nnx.Optimizer, batch: Any):
+        def loss_fn(model: nnx.Module):
+            out = objective(model, batch)
+            return out["loss"], out
+
+        (loss, _), grads = nnx.value_and_grad(loss_fn, has_aux=True)(model)
+        grad_norm = optax.global_norm(grads)
+        optimizer.update(model, grads)
+        return loss, grad_norm
+
+    return train_step
+
+
+def make_eval_step(objective: Any) -> EvalStep:
+    """Build the jitted eval step: loss, plus correct-count when the
+    objective emits logits/targets (the keys are static per objective,
+    so this branch is resolved at trace time)."""
+
+    @nnx.jit
+    def eval_step(model: nnx.Module, batch: Any):
+        out = objective(model, batch)
+        if "logits" in out and "targets" in out:
+            correct = jnp.sum(jnp.argmax(out["logits"], axis=-1) == out["targets"])
+            total = jnp.asarray(out["targets"].shape[0])
+        else:
+            correct, total = jnp.asarray(0), jnp.asarray(0)
+        return out["loss"], correct, total
+
+    return eval_step
+
+
+def train_epoch(
+    model: nnx.Module,
+    optimizer: nnx.Optimizer,
+    train_step: TrainStep,
+    train_loader: Any,
+    epoch: int,
+    logger: Any,
+    lr_at: Callable[[int], float],
+) -> float:
+    """Run one training epoch; returns the average training loss."""
+    model.train()
+    total_loss = 0.0
+
+    for batch_idx, batch in enumerate(train_loader):
+        loss, grad_norm = train_step(model, optimizer, batch)
+        total_loss += float(loss)
+
+        if batch_idx % 10 == 0:
+            step = epoch * len(train_loader) + batch_idx
+            logger.log("train/loss_step", float(loss), step)
+            logger.log("train/lr", lr_at(step), step)
+            logger.log("train/grad_norm", float(grad_norm), step)
+
+    avg_loss = total_loss / len(train_loader)
+    logger.log("train/loss_epoch", avg_loss, epoch)
+    return avg_loss
+
+
+def validate(
+    model: nnx.Module,
+    eval_step: EvalStep,
+    val_loader: Any,
+    epoch: int,
+    logger: Any,
+) -> tuple[float, float]:
+    """Run validation; returns (average val loss, accuracy).
+
+    Accuracy is 0.0 when the objective doesn't emit logits/targets. For other
+    metrics (retrieval@k, regression MSE), extend this function — there is no
+    callback indirection to fight.
+    """
+    model.eval()
+    total_loss = 0.0
+    correct = 0
+    total = 0
+
+    for batch in val_loader:
+        loss, c, t = eval_step(model, batch)
+        total_loss += float(loss)
+        correct += int(c)
+        total += int(t)
+
+    avg_loss = total_loss / len(val_loader)
+    accuracy = correct / total if total > 0 else 0.0
+
+    logger.log("val/loss", avg_loss, epoch)
+    if total > 0:
+        logger.log("val/acc", accuracy, epoch)
+    return avg_loss, accuracy
+
+
+# --- checkpoints -----------------------------------------------------------
+# Plain msgpack of pure dicts (flax.serialization) — no extra dependency.
+# Single-host only by design; for sharded/multi-host checkpoints, switch to
+# orbax-checkpoint (these two functions are the only thing that changes).
+
+
+def save_checkpoint(
+    path: Path, model: nnx.Module, optimizer: nnx.Optimizer, counters: dict[str, Any]
+) -> None:
+    """Write model + optimizer state and loop counters to one msgpack file."""
+    ckpt = {
+        "model": nnx.to_pure_dict(nnx.state(model)),
+        "optimizer": nnx.to_pure_dict(nnx.state(optimizer)),
+        "counters": counters,
+    }
+    path.write_bytes(serialization.msgpack_serialize(jax.device_get(_str_keys(ckpt))))
+
+
+def _str_keys(tree: Any) -> Any:
+    # msgpack only restores string map keys; replace_by_pure_dict converts
+    # digit strings back to the int path entries optax states use.
+    if isinstance(tree, dict):
+        return {str(k): _str_keys(v) for k, v in tree.items()}
+    return tree
+
+
+def load_checkpoint(
+    path: Path, model: nnx.Module, optimizer: nnx.Optimizer | None = None
+) -> dict[str, Any]:
+    """Restore model (and optionally optimizer) state in place; returns counters.
+
+    The checkpoint must come from the same config (same architecture and
+    optax chain) — structure is matched strictly, like a torch state_dict.
+    """
+    ckpt = serialization.msgpack_restore(path.read_bytes())
+    _restore(model, ckpt["model"])
+    if optimizer is not None:
+        _restore(optimizer, ckpt["optimizer"])
+    counters: dict[str, Any] = ckpt["counters"]
+    return counters
+
+
+def _restore(obj: Any, pure: dict[str, Any]) -> None:
+    state = nnx.state(obj)
+    nnx.replace_by_pure_dict(state, pure)
+    nnx.update(obj, state)

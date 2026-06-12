@@ -1,7 +1,9 @@
 # Cheatsheet
 
 Every common command on one page. `<pkg>` is your package name; drop the
-`uv run` prefix if your venv is activated.
+`uv run` prefix if your venv is activated. Everything here works identically
+on PyTorch and JAX projects (`trainer.precision`/`devices` are
+PyTorch-specific — JAX handles both automatically).
 
 ## Train
 

@@ -196,7 +196,11 @@ The sbatch scripts assume `.venv/` exists on a shared filesystem (`uv sync --ext
 
 | Tool | Purpose |
 |------|---------|
+{%- if framework == 'pytorch' %}
 | [Lightning Fabric](https://lightning.ai/docs/fabric/) | Multi-GPU, mixed precision — no hidden training loop |
+{%- else %}
+| [flax NNX](https://flax.readthedocs.io/) + [optax](https://optax.readthedocs.io/) | Model + optimizer (schedule, clipping, accumulation in the optax chain) |
+{%- endif %}
 | [pydantic](https://docs.pydantic.dev/) + [tyro](https://brentyi.github.io/tyro/) | Typed configs with Hydra-style CLI (utils/cli.py) |
 | [submitit](https://github.com/facebookincubator/submitit) + [Optuna](https://optuna.org/) | SLURM sweeps + HP search |
 | [W&B](https://wandb.ai/) / [trackio](https://github.com/gradio-app/trackio) / [TensorBoard](https://www.tensorflow.org/tensorboard) | Experiment tracking (switchable) |

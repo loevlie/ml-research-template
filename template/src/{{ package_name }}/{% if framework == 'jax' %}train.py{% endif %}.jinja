@@ -1,0 +1,194 @@
+"""Training entry point (JAX / flax NNX).
+
+Thin orchestrator: parse typed config → build data/model/objective/optimizer →
+call training loop primitives. The loop itself lives in `training_loop.py`,
+the loss + forward pass in `objectives.py`, and the config schema in
+`configs.py` — swap them without touching this file.
+
+The optax chain below is the one structural difference from the torch loop:
+the LR schedule, gradient clipping, and gradient accumulation are composed
+into the optimizer instead of written into the loop.
+
+Usage:
+    python src/{{ package_name }}/train.py                                # base preset
+    python src/{{ package_name }}/train.py experiment=example             # named preset
+    python src/{{ package_name }}/train.py loss=contrastive               # swap objective
+    python src/{{ package_name }}/train.py model.lr=1e-3 seed=123         # overrides
+    python src/{{ package_name }}/train.py run_dir=outputs/x trainer.resume=auto
+"""
+
+import json
+import math
+from pathlib import Path
+
+import jax
+import optax
+from flax import nnx
+
+from {{ package_name }}.configs import GROUPS, TrainConfig
+from {{ package_name }}.data.datamodule import create_dataloaders
+from {{ package_name }}.experiments import EXPERIMENTS
+from {{ package_name }}.models.module import build_model
+from {{ package_name }}.training_loop import (
+    load_checkpoint,
+    make_eval_step,
+    make_train_step,
+    save_checkpoint,
+    train_epoch,
+    validate,
+)
+from {{ package_name }}.utils import cli
+from {{ package_name }}.utils.run_dir import create_run_dir
+from {{ package_name }}.utils.seed import set_seed
+
+
+def _build_schedule(cfg: TrainConfig, total_steps: int) -> optax.Schedule:
+    """LR schedule from the scheduler config (the torch utils/schedulers.py twin)."""
+    sched, lr = cfg.trainer.scheduler, cfg.model.lr
+    if sched.name == "cosine":
+        return optax.warmup_cosine_decay_schedule(
+            init_value=0.0,
+            peak_value=lr,
+            warmup_steps=sched.warmup_steps,
+            decay_steps=total_steps,
+            end_value=lr * sched.min_lr_ratio,
+        )
+    if sched.name == "constant" and sched.warmup_steps > 0:
+        return optax.join_schedules(
+            [optax.linear_schedule(0.0, lr, sched.warmup_steps), optax.constant_schedule(lr)],
+            [sched.warmup_steps],
+        )
+    return optax.constant_schedule(lr)  # "none" (and warmup-free "constant")
+
+
+def run(cfg: TrainConfig) -> float:
+    """Train a model from a fully-built config (also the entry for tune.py).
+
+    Returns:
+        Best validation accuracy.
+    """
+    cfg = cfg.resolved()
+    set_seed(cfg.seed, deterministic=cfg.deterministic)
+    output_dir = create_run_dir(cfg, cfg.run_dir)
+    logger = cfg.logger.build(output_dir)
+
+    # --- Data + Model (the two seams: datamodule.py and models/module.py) ---
+    loaders = create_dataloaders(cfg.data, seed=cfg.seed)
+    model = build_model(cfg.model, seed=cfg.seed)
+    model_name = type(model).__name__
+
+    # --- Optimizer: schedule, clipping, and accumulation composed in optax ---
+    accumulate = cfg.trainer.accumulate_grad_batches
+    steps_per_epoch = math.ceil(len(loaders.train) / accumulate)
+    schedule = _build_schedule(cfg, total_steps=cfg.trainer.max_epochs * steps_per_epoch)
+    tx = optax.adamw(schedule, weight_decay=cfg.model.weight_decay)
+    if cfg.trainer.gradient_clip_val:
+        tx = optax.chain(optax.clip_by_global_norm(cfg.trainer.gradient_clip_val), tx)
+    if accumulate > 1:
+        tx = optax.MultiSteps(tx, every_k_schedule=accumulate)
+    optimizer = nnx.Optimizer(model, tx, wrt=nnx.Param)
+
+    # --- Objective (pluggable: supervised / contrastive / masked / next-state) ---
+    objective = cfg.loss.build()
+    train_step = make_train_step(objective)
+    eval_step = make_eval_step(objective)
+
+    def lr_at(step: int) -> float:
+        return float(schedule((step + 1) // accumulate))
+
+    # --- Resume ---
+    counters: dict = {
+        "epoch": -1,
+        "best_val_loss": float("inf"),
+        "best_val_acc": 0.0,
+        "patience_counter": 0,
+    }
+    resume_path: Path | None = None
+    if cfg.trainer.resume == "auto":
+        candidate = output_dir / "last.ckpt"
+        resume_path = candidate if candidate.exists() else None
+    elif cfg.trainer.resume:
+        resume_path = Path(cfg.trainer.resume)
+    if resume_path is not None:
+        counters = load_checkpoint(resume_path, model, optimizer)
+        print(f"Resumed from {resume_path} (epoch {counters['epoch']})")
+
+    start_epoch = int(counters["epoch"]) + 1
+    best_val_loss = float(counters["best_val_loss"])
+    best_val_acc = float(counters["best_val_acc"])
+    patience_counter = int(counters["patience_counter"])
+
+    n_params = sum(x.size for x in jax.tree.leaves(nnx.state(model, nnx.Param)))
+    rule = "-" * 72
+    print(
+        f"{rule}\n"
+        f"run dir   {output_dir}\n"
+        f"model     {model_name} | {n_params:,} params | lr={cfg.model.lr:g}\n"
+        f"trainer   max {cfg.trainer.max_epochs} epochs | jax {jax.default_backend()} | "
+        f"seed={cfg.seed}\n"
+        f"loss      {type(cfg.loss).__name__} | logger {cfg.logger.kind}\n"
+        f"config    {output_dir}/config.yaml (full snapshot + git state)\n"
+        f"{rule}"
+    )
+
+    for epoch in range(start_epoch, cfg.trainer.max_epochs):
+        train_loss = train_epoch(model, optimizer, train_step, loaders.train, epoch, logger, lr_at)
+        val_loss, val_acc = validate(model, eval_step, loaders.val, epoch, logger)
+
+        print(
+            f"Epoch {epoch:3d} | train_loss={train_loss:.4f} | "
+            f"val_loss={val_loss:.4f} | val_acc={val_acc:.4f}"
+        )
+
+        # Checkpointing
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_val_acc = val_acc
+            patience_counter = 0
+        else:
+            patience_counter += 1
+
+        counters = {
+            "epoch": epoch,
+            "best_val_loss": best_val_loss,
+            "best_val_acc": best_val_acc,
+            "patience_counter": patience_counter,
+        }
+        if patience_counter == 0:
+            save_checkpoint(output_dir / "best.ckpt", model, optimizer, counters)
+        save_checkpoint(output_dir / "last.ckpt", model, optimizer, counters)
+
+        # Early stopping
+        if patience_counter >= cfg.trainer.patience:
+            print(f"Early stopping at epoch {epoch} (patience={cfg.trainer.patience})")
+            break
+
+    # Save final metrics for multi-seed aggregation
+    metrics = {"val/loss": best_val_loss, "val/acc": best_val_acc}
+    with open(output_dir / "metrics.json", "w") as f:
+        json.dump(metrics, f, indent=2)
+
+    logger.finalize()
+
+    print(
+        f"{rule}\n"
+        f"best      val_loss={best_val_loss:.4f} | val_acc={best_val_acc:.4f}\n"
+        f"ckpts     {output_dir}/best.ckpt (+ last.ckpt)\n"
+        f"evaluate  uv run python src/{{ package_name }}/eval.py ckpt_path={output_dir}/best.ckpt\n"
+        f"{rule}"
+    )
+    return best_val_acc
+
+
+def main() -> float:
+    cfg = cli.parse(
+        TrainConfig,
+        presets=EXPERIMENTS,
+        groups=GROUPS,
+        description="Train {{ package_name }}.",
+    )
+    return run(cfg)
+
+
+if __name__ == "__main__":
+    main()

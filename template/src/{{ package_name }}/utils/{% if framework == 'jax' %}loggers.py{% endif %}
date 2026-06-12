@@ -1,0 +1,81 @@
+"""Minimal tracker adapters (JAX path — no Lightning, so no Fabric loggers).
+
+One tiny interface, four backends. Every adapter is a screenful: if your lab
+standardizes on something else (MLflow, Neptune-alike), copy CsvLogger and
+swap the write calls.
+
+    logger.log("train/loss", 0.93, step=120)
+    logger.finalize()
+"""
+
+import csv
+from pathlib import Path
+from typing import Any, Protocol
+
+
+class Logger(Protocol):
+    """What the training loop needs from a tracker — nothing more."""
+
+    def log(self, name: str, value: float, step: int) -> None: ...
+    def finalize(self) -> None: ...
+
+
+class CsvLogger:
+    """Append metrics to <run_dir>/metrics.csv — zero deps, always works."""
+
+    def __init__(self, run_dir: Path) -> None:
+        self._file = (run_dir / "metrics.csv").open("w", newline="")
+        self._writer = csv.writer(self._file)
+        self._writer.writerow(["step", "name", "value"])
+
+    def log(self, name: str, value: float, step: int) -> None:
+        self._writer.writerow([step, name, value])
+        self._file.flush()  # survive crashes and preemptions
+
+    def finalize(self) -> None:
+        self._file.close()
+
+
+class WandbLogger:
+    """Weights & Biases. Needs: uv sync --extra tracking-wandb."""
+
+    def __init__(self, project: str, run_dir: Path) -> None:
+        import wandb
+
+        self._run = wandb.init(project=project, dir=str(run_dir))
+
+    def log(self, name: str, value: float, step: int) -> None:
+        self._run.log({name: value}, step=step)
+
+    def finalize(self) -> None:
+        self._run.finish()
+
+
+class TrackioLogger:
+    """trackio — local-first, wandb-compatible API. Needs: uv sync --extra tracking-trackio."""
+
+    def __init__(self, project: str) -> None:
+        import trackio
+
+        self._run: Any = trackio.init(project=project)
+
+    def log(self, name: str, value: float, step: int) -> None:
+        self._run.log({name: value}, step=step)
+
+    def finalize(self) -> None:
+        self._run.finish()
+
+
+class TensorBoardLogger:
+    """TensorBoard via tensorboardX (torch-free writer)."""
+
+    def __init__(self, run_dir: Path) -> None:
+        from tensorboardX import SummaryWriter
+
+        self._writer = SummaryWriter(logdir=str(run_dir / "tensorboard"))
+
+    def log(self, name: str, value: float, step: int) -> None:
+        self._writer.add_scalar(name, value, step)
+
+    def finalize(self) -> None:
+        self._writer.close()

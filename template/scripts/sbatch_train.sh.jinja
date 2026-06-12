@@ -36,6 +36,7 @@ mkdir -p logs
 #   uv sync --extra dev --extra cluster
 source .venv/bin/activate
 
+{%- if framework == 'pytorch' %}
 # One srun + torchrun pair handles single-node multi-GPU DDP.
 # For multi-node DDP, see the note in README under "Running on SLURM".
 srun torchrun \
@@ -45,3 +46,11 @@ srun torchrun \
         run_dir="outputs/slurm_${SLURM_JOB_ID}" \
         trainer.resume=auto \
         "$@"
+{%- else %}
+# JAX auto-selects the GPU; the loop is single-device by design.
+srun python \
+    src/{{ package_name }}/train.py \
+        run_dir="outputs/slurm_${SLURM_JOB_ID}" \
+        trainer.resume=auto \
+        "$@"
+{%- endif %}

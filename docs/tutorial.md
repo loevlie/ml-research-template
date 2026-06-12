@@ -51,6 +51,11 @@ class DataConfig(pydantic.BaseModel):
     val_split: float = 0.2
 ```
 
+`n_features` and `n_classes` do real work: `TrainConfig.resolved()` copies
+them into the model config, so the MLP sizes its input and output layers to
+the data automatically. And because `csv_path` is a config field, it's now a
+CLI flag (`data.csv_path=...`) and lands in every run's provenance snapshot.
+
 **Second**, replace the placeholder dataset in
 `src/wine_quality/data/datamodule.py`:
 
@@ -84,9 +89,9 @@ class WineQualityDataset(Dataset):
     dataset = WineQualityDataset(cfg.csv_path)
 ```
 
-That's it. The example MLP already reads `n_features`/`n_classes` from the
-config, so `models/module.py` needs nothing — when you later bring your own
-architecture, you swap it inside `build_model()` the same way.
+The model side needs nothing today — the example MLP already sizes itself
+from the config. When you bring your own architecture, you'll swap it inside
+`build_model()` in `models/module.py`, the same one-seam move.
 
 ## 3 · Train
 
@@ -113,7 +118,10 @@ evaluate  uv run python src/wine_quality/eval.py ckpt_path=outputs/wine_first/be
 ------------------------------------------------------------------------
 ```
 
-Real data, learning visibly. The `evaluate` line is copy-pasteable:
+Three lines in that output earn their place: `config` points at the run's
+provenance snapshot (resolved config + git SHA + the exact command — how you
+re-run this result months later), `ckpts` is where `best.ckpt` and `last.ckpt`
+land every epoch, and `evaluate` is ready to paste:
 
 ```bash
 uv run python src/wine_quality/eval.py ckpt_path=outputs/wine_first/best.ckpt
@@ -124,9 +132,9 @@ eval: settings restored from outputs/wine_first/config.yaml
 Eval | loss=0.9370 | acc=0.6426
 ```
 
-Note it restored the training config (including your `csv_path`) from the
-run's snapshot — no re-specifying anything, and it reproduces the training-time
-numbers exactly.
+The first line is the snapshot doing its job: eval read the training run's
+config (including your `csv_path`) instead of making you re-specify it, and
+the numbers match training exactly.
 
 ## 4 · Name the experiment
 

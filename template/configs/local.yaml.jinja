@@ -2,7 +2,14 @@
 # and CLI args (utils/cli.py). Keys mirror the config schema (configs.py);
 # ${a.b} strings resolve against the composed config.
 #
+{%- if framework == 'pytorch' %}
 # data:
 #   num_workers: 0        # laptop
 # trainer:
 #   devices: 1
+{%- else %}
+# data:
+#   batch_size: 32        # laptop
+# trainer:
+#   max_epochs: 5
+{%- endif %}

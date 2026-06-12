@@ -1,8 +1,8 @@
 site_name: ml-research-template
 site_description: >-
-  A Copier template for ML research projects — PyTorch + Lightning Fabric +
-  typed configs (pydantic + tyro) + uv, with multi-seed significance testing
-  and copier update baked in.
+  A Copier template for ML research projects — PyTorch or JAX, typed configs
+  (pydantic + tyro), uv — with multi-seed significance testing and copier
+  update baked in.
 site_url: https://loevlie.github.io/ml-research-template/
 repo_url: https://github.com/loevlie/ml-research-template
 repo_name: loevlie/ml-research-template
@@ -102,4 +102,5 @@ nav:
       - Experiment tracking: workflows/tracking.md
       - Tabular benchmarking: workflows/tabular-benchmarking.md
       - Multimodal: workflows/multimodal.md
+      - JAX: workflows/jax.md
   - Updating projects: updating.md

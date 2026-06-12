@@ -1,0 +1,64 @@
+"""Example model (flax NNX).
+
+This file is the model seam: `build_model(cfg, seed=...)` is all train.py and
+eval.py know about. To use your own architecture, replace ExampleModel and the
+body of build_model (keep the signature) and add whatever fields you need to
+ModelConfig in configs.py — both files are yours and are never overwritten by
+`copier update`.
+
+JAX note: randomness is explicit, so the model takes its init key via
+nnx.Rngs(seed) instead of reading global state.
+
+Demonstrates shape-annotated signatures with jaxtyping + beartype.
+"""
+
+from beartype import beartype
+from flax import nnx
+from jaxtyping import Array, Float, jaxtyped
+
+from {{ package_name }}.configs import ModelConfig
+
+
+class ExampleModel(nnx.Module):
+    """Simple MLP classifier -- replace with your architecture.
+
+    Args:
+        n_features: Input feature dimensionality.
+        hidden_dim: Hidden layer size.
+        n_classes: Number of output classes.
+        rngs: Init randomness (explicit, per JAX convention).
+    """
+
+    def __init__(
+        self,
+        n_features: int = 32,
+        hidden_dim: int = 128,
+        n_classes: int = 10,
+        *,
+        rngs: nnx.Rngs,
+    ) -> None:
+        self.linear1 = nnx.Linear(n_features, hidden_dim, rngs=rngs)
+        self.linear2 = nnx.Linear(hidden_dim, hidden_dim, rngs=rngs)
+        self.head = nnx.Linear(hidden_dim, n_classes, rngs=rngs)
+
+    @jaxtyped(typechecker=beartype)
+    def __call__(self, x: Float[Array, "batch features"]) -> Float[Array, "batch classes"]:
+        x = nnx.relu(self.linear1(x))
+        x = nnx.relu(self.linear2(x))
+        return self.head(x)
+
+
+def build_model(cfg: ModelConfig, *, seed: int = 0) -> nnx.Module:
+    """Build the model from the model config — the model seam.
+
+    Swap in your architecture here; keep this signature so train.py and
+    eval.py never need editing. New knobs (depth, dropout, backbone name)
+    belong on ModelConfig.
+    """
+    assert cfg.n_features is not None and cfg.n_classes is not None  # filled by resolved()
+    return ExampleModel(
+        n_features=cfg.n_features,
+        hidden_dim=cfg.hidden_dim,
+        n_classes=cfg.n_classes,
+        rngs=nnx.Rngs(seed),
+    )

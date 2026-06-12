@@ -1,0 +1,110 @@
+"""Training objectives.
+
+An Objective bundles the forward pass + loss computation in one callable so the
+training loop stays a tiny orchestrator. Each Objective owns:
+  - how to call the model on a batch (batch structure is objective-specific)
+  - what loss to return
+  - (optionally) what intermediates to surface for metrics/logging
+
+Swap objectives from the CLI:  `python train.py loss=contrastive`
+Config classes live in `configs.py` (GROUPS registers the variants).
+
+Contract
+--------
+An Objective is any callable with the signature:
+
+    def __call__(self, model: nnx.Module, batch: Any) -> dict[str, Any]
+
+The returned dict MUST contain a scalar array under key `"loss"`. Anything
+else is optional. Two conventional keys that enable automatic metrics:
+
+  - `"logits"`  — raw classifier outputs
+  - `"targets"` — integer class labels
+
+When both are present, the validation loop computes argmax-based accuracy
+automatically. Objectives for regression, contrastive, or masked prediction
+just omit these keys and the accuracy branch stays inactive.
+
+Objectives run inside jitted, differentiated steps — keep them pure functions
+of (model, batch): no prints, no mutation, jax.numpy only.
+
+Adding a new objective
+----------------------
+1. Define a class with `__call__(model, batch) -> dict`.
+2. Add a config class with a `build()` in `configs.py` and register it in
+   `GROUPS["loss"]` — `loss=<name>` then works on every entry point.
+3. If your batch structure differs from `(x, y)`, pair with a matching
+   loader (contrastive → pairs; masked-prediction → (x, mask, y); etc.).
+"""
+
+from typing import Any, Protocol
+
+import jax
+import jax.numpy as jnp
+import optax
+from flax import nnx
+
+
+class Objective(Protocol):
+    """Minimal interface every objective satisfies.
+
+    Duck-typed — no need to inherit. Any class with a matching `__call__`
+    works as an Objective.
+    """
+
+    def __call__(self, model: nnx.Module, batch: Any) -> dict[str, Any]: ...
+
+
+class SupervisedObjective:
+    """Cross-entropy supervised classification.
+
+    Args:
+        label_smoothing: Spread this fraction of probability mass over
+            non-target classes (0.0 = off).
+    """
+
+    def __init__(self, label_smoothing: float = 0.0) -> None:
+        self.label_smoothing = label_smoothing
+
+    def __call__(self, model: nnx.Module, batch: tuple) -> dict[str, Any]:
+        x, y = batch
+        logits = model(x)
+        if self.label_smoothing > 0:
+            labels = optax.smooth_labels(jax.nn.one_hot(y, logits.shape[-1]), self.label_smoothing)
+            loss = optax.softmax_cross_entropy(logits, labels).mean()
+        else:
+            loss = optax.softmax_cross_entropy_with_integer_labels(logits, y).mean()
+        return {"loss": loss, "logits": logits, "targets": y}
+
+
+class ContrastiveObjective:
+    """Symmetric InfoNCE (CLIP-style) over paired views.
+
+    Works for two modalities (image/text) or two augmented views of one
+    modality (SimCLR-style SSL). Expects:
+
+      - batch: a pair ``(x_a, x_b)`` where row i of x_a matches row i of x_b
+      - model: callable as ``model(x_a, x_b) -> (z_a, z_b)``, two [B, D]
+        embedding arrays (e.g. a two-tower module)
+
+    Args:
+        temperature: Softmax temperature for the similarity logits.
+    """
+
+    def __init__(self, temperature: float = 0.07) -> None:
+        self.temperature = temperature
+
+    def __call__(self, model: nnx.Module, batch: tuple) -> dict[str, Any]:
+        x_a, x_b = batch
+        z_a, z_b = model(x_a, x_b)
+        z_a = z_a / jnp.linalg.norm(z_a, axis=-1, keepdims=True)
+        z_b = z_b / jnp.linalg.norm(z_b, axis=-1, keepdims=True)
+
+        logits = (z_a @ z_b.T) / self.temperature
+        targets = jnp.arange(logits.shape[0])
+        loss = (
+            optax.softmax_cross_entropy_with_integer_labels(logits, targets).mean()
+            + optax.softmax_cross_entropy_with_integer_labels(logits.T, targets).mean()
+        ) / 2
+        # No "logits"/"targets" keys: classification accuracy doesn't apply.
+        return {"loss": loss}
