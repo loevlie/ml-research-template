@@ -108,9 +108,9 @@ loss      SupervisedLossConfig | logger csv
 config    outputs/wine_first/config.yaml (full snapshot + git state)
 ------------------------------------------------------------------------
 Epoch   0 | train_loss=1.7181 | val_loss=1.5782 | val_acc=0.5486
-Epoch   1 | train_loss=1.4688 | val_loss=1.3398 | val_acc=0.5674
+Epoch   1 | train_loss=1.4689 | val_loss=1.3399 | val_acc=0.5674
 ...
-Epoch  29 | train_loss=0.8659 | val_loss=0.9371 | val_acc=0.6489
+Epoch  29 | train_loss=0.8658 | val_loss=0.9371 | val_acc=0.6520
 ------------------------------------------------------------------------
 best      val_loss=0.9370 | val_acc=0.6426
 ckpts     outputs/wine_first/best.ckpt (+ last.ckpt)
@@ -167,12 +167,12 @@ uv run python scripts/aggregate_seeds.py outputs/multi_seed_<stamp> --metric val
 ```text
 Metric: val/acc
 Seeds:  [123, 1337, 42, 456, 789]
-Mean:   0.6213
-Std:    0.0285
-95% CI: [0.6063, 0.6583]
+Mean:   0.6219
+Std:    0.0322
+95% CI: [0.6044, 0.6520]
 ```
 
-That's the line that goes in the paper: **0.621 ± 0.029 (5 seeds)** — and when
+That's the line that goes in the paper: **0.622 ± 0.032 (5 seeds)** — and when
 you have a baseline to beat, run it with the *same seeds* and pass
 `--baseline` to get the paired significance test and effect size
 ([how](workflows/multi-seed-stats.md) · [what the numbers mean](workflows/stats-explained.md)).

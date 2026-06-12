@@ -1,7 +1,7 @@
 """Learning-rate schedulers.
 
 One factory, stepped once per optimizer step (not per epoch). Configured via
-`trainer.scheduler` in configs/trainer/default.yaml; `name: none` keeps the
+`trainer.scheduler` (SchedulerConfig in configs.py); `name: none` keeps the
 constant-LR behavior.
 """
 

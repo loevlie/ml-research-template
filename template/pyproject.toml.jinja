@@ -16,7 +16,7 @@ dependencies = [
 {%- if framework == 'pytorch' %}
     # Core
     "torch>=2.2.0",
-    "lightning>=2.2.0",
+    "lightning>=2.5.0",
 {%- else %}
     # Core (jax[cuda12] below routes GPU wheels on Linux)
     "jax>=0.5.0",
@@ -69,8 +69,8 @@ dependencies = [
     # Default logger
     "wandb>=0.16.0",
 {%- elif logger == "trackio" %}
-    # Default logger
-    "trackio>=0.10.0",
+    # Default logger (pre-1.0: breaking changes allowed, so cap below 1)
+    "trackio>=0.10.0,<1",
 {%- endif %}
 ]
 
@@ -96,14 +96,14 @@ docs = [
     "mkdocstrings[python]>=0.24.0",
 ]
 demo = [
-    "gradio>=4.20.0",
+    "gradio>=6,<7",
 ]
 {%- endif %}
 tracking-wandb = [
     "wandb>=0.16.0",
 ]
 tracking-trackio = [
-    "trackio>=0.10.0",
+    "trackio>=0.10.0,<1",
 ]
 stats = [
     "pingouin>=0.5.4",
@@ -177,6 +177,11 @@ ignore = [
     "E501",  # line length (handled by formatter)
     "F722",  # jaxtyping shape annotations use string syntax ruff doesn't understand
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# cli.py ships with the template and must stay valid on Python 3.11 —
+# PEP 695 type-parameter syntax (UP047) would break those projects.
+"src/{{ package_name }}/utils/cli.py" = ["UP047"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["{{ package_name }}"]

@@ -108,12 +108,12 @@ author_email:
 
 python_version:
   type: str
-  help: "Python version to pin."
+  help: "Python version to pin (3.13 is supported across torch/jax/lightning; 3.14 is not yet)."
   choices:
-    - "3.10"
     - "3.11"
     - "3.12"
-  default: "3.11"
+    - "3.13"
+  default: "3.12"
 
 framework:
   type: str

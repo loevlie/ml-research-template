@@ -81,6 +81,6 @@ def create_image_text_dataloader(
         collate_fn=collate,
         worker_init_fn=seed_worker,
         generator=g,
-        pin_memory=True,
+        pin_memory=torch.cuda.is_available(),  # pinning is CUDA-only; avoids the MPS warning
         persistent_workers=num_workers > 0,
     )

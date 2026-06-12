@@ -26,7 +26,7 @@ copier copy --trust gh:loevlie/ml-research-template my-project
 | `package_name` | derived | Import name (`retinal_oct_classifier`) |
 | `project_description` | generic | `pyproject.toml` + README |
 | `author_name` / `author_email` | — | LICENSE + pyproject authors |
-| `python_version` | `3.11` | Pins `.python-version`, `requires-python`, ruff/mypy targets |
+| `python_version` | `3.12` | Pins `.python-version`, `requires-python`, ruff/mypy targets (3.11–3.13) |
 | `framework` | `pytorch` | Deep learning library: `pytorch` or `jax` — see [JAX](workflows/jax.md) |
 | `cuda_version` | `cu124` | GPU wheel routing (`cpu`, `cu118`–`cu128`); for jax, any CUDA choice installs `jax[cuda12]` |
 | `logger` | `wandb` | Default tracker: `wandb`, `trackio`, `tensorboard`, `csv` — see [Tracking](workflows/tracking.md) |
@@ -63,7 +63,7 @@ run dir   outputs/2026-06-12/10-53-13
 model     ExampleModel | 22,026 params | lr=0.0003
 ---> 100%
 Epoch   0 | train_loss=2.3055 | val_loss=2.2940 | val_acc=0.0850
-best      val_loss=2.2930 | ckpts outputs/.../best.ckpt
+best      val_loss=2.2925 | ckpts outputs/.../best.ckpt
 ```
 
 That trains the reference MLP on synthetic data — proof the whole pipeline works before you touch anything. Then:

@@ -69,7 +69,7 @@ def main() -> None:
 
     # --- Load checkpoint ---
     state = {"model": model}
-    fabric.load(cfg.ckpt_path, state)
+    fabric.load(cfg.ckpt_path, state, weights_only=True)
 
     # --- Evaluate ---
     model.eval()

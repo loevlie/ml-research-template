@@ -18,7 +18,7 @@ grep -r "val/acc" outputs/sweep_*/run_*/metrics.json
 ```text
 run_000_34788291:  "val/acc": 0.583    # lr=1e-4 seed=42
 run_001_14355ae5:  "val/acc": 0.580    # lr=1e-4 seed=123
-run_002_578de15c:  "val/acc": 0.627    # lr=1e-3 seed=42
+run_002_578de15c:  "val/acc": 0.624    # lr=1e-3 seed=42
 run_003_76207663:  "val/acc": 0.621    # lr=1e-3 seed=123
 ```
 
@@ -36,12 +36,12 @@ uv run python scripts/tune.py --n-trials 5
 ```
 
 ```text
-tune: best value 0.6583 with {'model.lr': 4.35e-05, 'model.hidden_dim': 512,
-'model.weight_decay': 4.43e-06, 'data.batch_size': 64}
+tune: best value 0.6552 with {'model.lr': 9.31e-03, 'model.hidden_dim': 512,
+'model.weight_decay': 1.26e-05, 'data.batch_size': 64}
 ```
 
-Five trials and it beat both of our hand-picked configs — with a *wider,
-slower* model than we tried. Workers share the study through a journal file,
+Five trials and it beat both of our hand-picked configs — with a *wider*
+model than we tried. Workers share the study through a journal file,
 so `--workers 8 --cluster slurm` parallelizes it with no database server.
 
 ## 3 · Kill it, resume it
@@ -58,9 +58,9 @@ uv run python src/wine_quality/train.py experiment=wine \
 Run the **same command again**:
 
 ```text
-Resumed from outputs/long/last.ckpt (epoch 71)
-Epoch  72 | train_loss=0.4844 | val_loss=1.0707 | val_acc=0.6332
-Epoch  73 | train_loss=0.4812 | val_loss=1.0608 | val_acc=0.6364
+Resumed from outputs/long/last.ckpt (epoch 51)
+Epoch  52 | train_loss=0.5834 | val_loss=0.9894 | val_acc=0.6395
+Epoch  53 | train_loss=0.5810 | val_loss=0.9742 | val_acc=0.6364
 ```
 
 The loss continues falling smoothly because `last.ckpt` carries the
@@ -99,16 +99,16 @@ uv run python scripts/aggregate_seeds.py outputs/multi_seed_<wine> \
 
 ```text
 --- Paired Comparison (shared seeds: [42, 123, 456, 789, 1337]) ---
-Ours:     0.6213 +/- 0.0285
-Baseline: 0.6176 +/- 0.0152
-Delta:    +0.0038
+Ours:     0.6219 +/- 0.0322
+Baseline: 0.6169 +/- 0.0165
+Delta:    +0.0050
 Test:     paired t-test (fallback, n<6 for Wilcoxon)
-Stat:     0.5828, p=0.5913
-Effect:   Cohen's d = 0.165
+Stat:     0.6610, p=0.5448
+Effect:   Cohen's d = 0.196
 NOT significant at p<0.05
 ```
 
-A +0.4% delta that **doesn't survive the test** — at this budget, our
+A +0.5% delta that **doesn't survive the test** — at this budget, our
 hand-tuned lr is seed noise, and the machinery just stopped us from
 claiming otherwise. (Note the t-test fallback firing at 5 seeds — that's
 the `2/2^N` floor from [Statistics, explained](workflows/stats-explained.md).)

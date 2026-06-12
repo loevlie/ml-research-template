@@ -47,6 +47,12 @@ def run(cfg: TrainConfig) -> float:
     output_dir = create_run_dir(cfg, cfg.run_dir or os.environ.get(run_dir_env))
     os.environ[run_dir_env] = str(output_dir)
 
+    # TF32 matmuls on Ampere+ GPUs — the standard free-speed setting for fp32.
+    if hasattr(torch.backends.cuda.matmul, "fp32_precision"):  # torch >= 2.9 API
+        torch.backends.cuda.matmul.fp32_precision = "tf32"
+    else:
+        torch.set_float32_matmul_precision("high")
+
     # --- Fabric ---
     fabric = L.Fabric(
         accelerator=cfg.trainer.accelerator,
@@ -60,7 +66,7 @@ def run(cfg: TrainConfig) -> float:
     loaders = create_dataloaders(cfg.data, seed=cfg.seed)
     model = build_model(cfg.model)
     model_name = type(model).__name__
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.AdamW(
         model.parameters(), lr=cfg.model.lr, weight_decay=cfg.model.weight_decay
     )
 
@@ -104,7 +110,8 @@ def run(cfg: TrainConfig) -> float:
     elif cfg.trainer.resume:
         resume_path = Path(cfg.trainer.resume)
     if resume_path is not None:
-        fabric.load(resume_path, state)
+        # weights_only pins torch.load's safe mode explicitly (default flipped in torch 2.6)
+        fabric.load(resume_path, state, weights_only=True)
         fabric.print(f"Resumed from {resume_path} (epoch {state['epoch']})")
 
     start_epoch = int(state["epoch"]) + 1

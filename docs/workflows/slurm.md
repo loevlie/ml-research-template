@@ -39,7 +39,7 @@ uv run python src/<pkg>/train.py trainer.resume=outputs/<run>/last.ckpt
 
 ```text
 Resumed from outputs/myrun/last.ckpt (epoch 1)
-Epoch   2 | train_loss=2.2795 | val_loss=2.2927 | val_acc=0.0900
+Epoch   2 | train_loss=2.2795 | val_loss=2.2928 | val_acc=0.0900
 ```
 
 Resume restores the epoch counter, best-metric tracking, early-stopping
