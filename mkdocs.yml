@@ -10,6 +10,7 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  favicon: assets/favicon.png
   icon:
     repo: fontawesome/brands/github
     logo: material/flask-outline
@@ -88,6 +89,8 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - Tutorial: tutorial.md
+  - Cheatsheet: cheatsheet.md
   - The stack (and why): stack.md
   - Workflows:
       - Train & experiment: workflows/training.md

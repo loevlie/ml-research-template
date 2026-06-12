@@ -3,14 +3,16 @@
 ## The moving parts
 
 ```
-src/<pkg>/configs.py       # typed config schema (pydantic) + GROUPS registry
-src/<pkg>/experiments.py   # named presets
-src/<pkg>/train.py         # thin orchestrator: parse → build → loop; exposes run(cfg)
-src/<pkg>/training_loop.py # train_epoch() + validate() — plain functions, no config inside
-src/<pkg>/objectives.py    # loss + forward bundled as a swappable callable
+src/<pkg>/configs.py          # typed config schema (pydantic) + GROUPS registry
+src/<pkg>/experiments.py      # named presets
+src/<pkg>/train.py            # thin orchestrator: parse → build → loop; exposes run(cfg)
+src/<pkg>/training_loop.py    # train_epoch() + validate() — plain functions, no config inside
+src/<pkg>/objectives.py       # loss + forward bundled as a swappable callable
+src/<pkg>/data/datamodule.py  # YOUR data, behind create_dataloaders(cfg, seed)
+src/<pkg>/models/module.py    # YOUR model, behind build_model(cfg)
 ```
 
-`train.py` builds everything from the config and calls the loop; the loop never parses config, so it's testable with plain arguments. Read those files once — they're short by design.
+`train.py` builds everything from the config and calls the loop; the loop never parses config, so it's testable with plain arguments. Your data and model live behind two factory functions — replace their bodies and the entry points never need editing (the [tutorial](../tutorial.md) shows this with a real dataset). Read those files once — they're short by design.
 
 ## Run things
 

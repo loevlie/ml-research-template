@@ -13,6 +13,7 @@ A Copier template for ML research — PyTorch + Lightning Fabric + typed configs
 with multi-seed significance testing and `copier update` baked in.
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
+[15-minute tutorial](tutorial.md){ .md-button }
 [Why this stack](stack.md){ .md-button }
 
 </div>

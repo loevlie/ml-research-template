@@ -1,7 +1,11 @@
 """Example dataset and dataloader factory.
 
-Replace with your actual dataset. Demonstrates reproducible data loading
-with seeded splits and worker init.
+This file is the data seam: `create_dataloaders(cfg, seed)` is all train.py
+and eval.py know about. To use your own data, replace the body (keep the
+signature) and add whatever fields you need to DataConfig in configs.py —
+both files are yours and are never overwritten by `copier update`.
+
+Demonstrates reproducible loading: seeded splits and worker init.
 """
 
 from dataclasses import dataclass
@@ -9,6 +13,7 @@ from dataclasses import dataclass
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split
 
+from {{ package_name }}.configs import DataConfig
 from {{ package_name }}.utils.seed import seed_worker
 
 
@@ -40,32 +45,25 @@ class DataLoaders:
     val: DataLoader
 
 
-def create_dataloaders(
-    n_samples: int = 1000,
-    n_features: int = 32,
-    n_classes: int = 10,
-    batch_size: int = 64,
-    num_workers: int = 4,
-    val_split: float = 0.2,
-    seed: int = 42,
-) -> DataLoaders:
-    """Create train and val dataloaders with reproducible splitting.
+def create_dataloaders(cfg: DataConfig, seed: int = 42) -> DataLoaders:
+    """Build train and val dataloaders from the data config — the data seam.
+
+    Replace the dataset below with your own; keep this signature so train.py
+    and eval.py never need editing. New knobs (paths, transforms, splits)
+    belong on DataConfig.
 
     Args:
-        n_samples: Total dataset size.
-        n_features: Feature dimensionality.
-        n_classes: Number of classes.
-        batch_size: Batch size for all dataloaders.
-        num_workers: Number of DataLoader workers.
-        val_split: Fraction of data used for validation.
+        cfg: The data config block.
         seed: Seed for the train/val split and worker init.
 
     Returns:
         DataLoaders with train and val loaders.
     """
-    dataset = ExampleDataset(n_samples=n_samples, n_features=n_features, n_classes=n_classes)
+    dataset = ExampleDataset(
+        n_samples=cfg.n_samples, n_features=cfg.n_features, n_classes=cfg.n_classes
+    )
 
-    n_val = int(len(dataset) * val_split)
+    n_val = int(len(dataset) * cfg.val_split)
     n_train = len(dataset) - n_val
     generator = torch.Generator().manual_seed(seed)
     train_set, val_set = random_split(dataset, [n_train, n_val], generator=generator)
@@ -73,20 +71,20 @@ def create_dataloaders(
     g = torch.Generator().manual_seed(seed)
     train_loader = DataLoader(
         train_set,
-        batch_size=batch_size,
+        batch_size=cfg.batch_size,
         shuffle=True,
-        num_workers=num_workers,
+        num_workers=cfg.num_workers,
         worker_init_fn=seed_worker,
         generator=g,
         pin_memory=True,
-        persistent_workers=num_workers > 0,
+        persistent_workers=cfg.num_workers > 0,
     )
     val_loader = DataLoader(
         val_set,
-        batch_size=batch_size,
+        batch_size=cfg.batch_size,
         shuffle=False,
-        num_workers=num_workers,
+        num_workers=cfg.num_workers,
         pin_memory=True,
-        persistent_workers=num_workers > 0,
+        persistent_workers=cfg.num_workers > 0,
     )
     return DataLoaders(train=train_loader, val=val_loader)

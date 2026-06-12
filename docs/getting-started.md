@@ -66,9 +66,16 @@ Every run lands in `outputs/<date>/<time>/` with the resolved config, logs, `bes
 
 ## Make it yours
 
-1. Replace `src/<pkg>/data/datamodule.py` with your dataset (keep the seeded-split pattern).
-2. Replace `src/<pkg>/models/module.py` with your architecture (keep the `@jaxtyped` shape annotations).
-3. If your loss isn't plain cross-entropy, add an objective — see [Train & experiment](workflows/training.md).
-4. Update `DataConfig` / `ModelConfig` in `src/<pkg>/configs.py` to match.
+Two factory functions are the seams between your code and the entry points —
+replace their bodies and you never touch `train.py` or `eval.py`:
 
-These files are listed in the template's `_skip_if_exists`, so future [`copier update`](updating.md) runs never overwrite them.
+1. **Data** — `create_dataloaders(cfg, seed)` in `src/<pkg>/data/datamodule.py`. Swap in your dataset; new knobs (paths, transforms) become fields on `DataConfig` in `configs.py`.
+2. **Model** — `build_model(cfg)` in `src/<pkg>/models/module.py`. Swap in your architecture (keep the `@jaxtyped` shape annotations); new knobs go on `ModelConfig`.
+3. **Loss** — if it isn't plain cross-entropy, add an objective — see [Train & experiment](workflows/training.md).
+
+All of these files are listed in the template's `_skip_if_exists`, so future
+[`copier update`](updating.md) runs never overwrite them.
+
+!!! tip "See it done end-to-end"
+    The [tutorial](tutorial.md) walks this exact path with a real dataset —
+    from `copier copy` to a multi-seed confidence interval in ~15 minutes.

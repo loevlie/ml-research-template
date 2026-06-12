@@ -25,7 +25,7 @@ from torch.utils.data import DataLoader
 from {{ package_name }}.configs import GROUPS, TrainConfig
 from {{ package_name }}.data.datamodule import create_dataloaders
 from {{ package_name }}.experiments import EXPERIMENTS
-from {{ package_name }}.models.module import ExampleModel
+from {{ package_name }}.models.module import build_model
 from {{ package_name }}.training_loop import train_epoch, validate
 from {{ package_name }}.utils import cli
 from {{ package_name }}.utils.run_dir import create_run_dir
@@ -40,7 +40,6 @@ def run(cfg: TrainConfig) -> float:
         Best validation accuracy.
     """
     cfg = cfg.resolved()
-    assert cfg.model.n_features is not None and cfg.model.n_classes is not None
     set_seed(cfg.seed, deterministic=cfg.deterministic)
     # Fabric's multi-device launcher re-runs this function in spawned ranks;
     # the env var makes them reuse rank 0's directory instead of minting one.
@@ -57,23 +56,10 @@ def run(cfg: TrainConfig) -> float:
     )
     fabric.launch()
 
-    # --- Data ---
-    loaders = create_dataloaders(
-        n_samples=cfg.data.n_samples,
-        n_features=cfg.data.n_features,
-        n_classes=cfg.data.n_classes,
-        batch_size=cfg.data.batch_size,
-        num_workers=cfg.data.num_workers,
-        val_split=cfg.data.val_split,
-        seed=cfg.seed,
-    )
-
-    # --- Model + Optimizer ---
-    model = ExampleModel(
-        n_features=cfg.model.n_features,
-        hidden_dim=cfg.model.hidden_dim,
-        n_classes=cfg.model.n_classes,
-    )
+    # --- Data + Model (the two seams: datamodule.py and models/module.py) ---
+    loaders = create_dataloaders(cfg.data, seed=cfg.seed)
+    model = build_model(cfg.model)
+    model_name = type(model).__name__
     optimizer = torch.optim.Adam(
         model.parameters(), lr=cfg.model.lr, weight_decay=cfg.model.weight_decay
     )
@@ -131,7 +117,7 @@ def run(cfg: TrainConfig) -> float:
     fabric.print(
         f"{rule}\n"
         f"run dir   {output_dir}\n"
-        f"model     {n_params:,} params | hidden_dim={cfg.model.hidden_dim} | lr={cfg.model.lr:g}\n"
+        f"model     {model_name} | {n_params:,} params | lr={cfg.model.lr:g}\n"
         f"trainer   max {cfg.trainer.max_epochs} epochs | {cfg.trainer.precision} | seed={cfg.seed}\n"
         f"loss      {type(cfg.loss).__name__} | logger {cfg.logger.kind}\n"
         f"config    {output_dir}/config.yaml (full snapshot + git state)\n"

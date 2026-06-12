@@ -6,8 +6,9 @@ These tests verify the basic pipeline works end-to-end.
 
 import torch
 
+from {{ package_name }}.configs import DataConfig, ModelConfig
 from {{ package_name }}.data.datamodule import create_dataloaders
-from {{ package_name }}.models.module import ExampleModel
+from {{ package_name }}.models.module import ExampleModel, build_model
 from {{ package_name }}.utils.seed import set_seed
 
 
@@ -42,9 +43,18 @@ def test_overfit_single_batch():
 def test_dataloaders():
     """Dataloaders create train and val splits."""
     set_seed(42)
-    loaders = create_dataloaders(n_samples=100, batch_size=16, num_workers=0)
+    cfg = DataConfig(n_samples=100, batch_size=16, num_workers=0)
+    loaders = create_dataloaders(cfg, seed=42)
     assert len(loaders.train) > 0
     assert len(loaders.val) > 0
+
+
+def test_build_model_seam():
+    """build_model produces a model matching the (resolved) config."""
+    cfg = ModelConfig(hidden_dim=64, n_features=32, n_classes=10)
+    model = build_model(cfg)
+    out = model(torch.randn(8, 32))
+    assert out.shape == (8, 10)
 
 
 def test_loss_at_init():

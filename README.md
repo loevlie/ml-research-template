@@ -16,6 +16,8 @@
   &nbsp;•&nbsp;
   <a href="https://loevlie.github.io/ml-research-template/getting-started/">Getting started</a>
   &nbsp;•&nbsp;
+  <a href="https://loevlie.github.io/ml-research-template/tutorial/">15-minute tutorial</a>
+  &nbsp;•&nbsp;
   <a href="https://loevlie.github.io/ml-research-template/stack/">The stack (and why)</a>
 </p>
 

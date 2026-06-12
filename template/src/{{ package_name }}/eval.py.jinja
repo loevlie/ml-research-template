@@ -18,7 +18,7 @@ import yaml
 
 from {{ package_name }}.configs import DataConfig, EvalConfig, ModelConfig
 from {{ package_name }}.data.datamodule import create_dataloaders
-from {{ package_name }}.models.module import ExampleModel
+from {{ package_name }}.models.module import build_model
 from {{ package_name }}.utils import cli
 from {{ package_name }}.utils.seed import set_seed
 
@@ -54,7 +54,6 @@ def main() -> None:
         presets={"base": default} if default is not None else None,
         description="Evaluate a checkpoint (training config auto-restored when found).",
     ).resolved()
-    assert cfg.model.n_features is not None and cfg.model.n_classes is not None
     set_seed(cfg.seed, deterministic=True)
 
     fabric = L.Fabric(
@@ -63,24 +62,9 @@ def main() -> None:
         precision=cfg.precision,
     )
 
-    # --- Data ---
-    loaders = create_dataloaders(
-        n_samples=cfg.data.n_samples,
-        n_features=cfg.data.n_features,
-        n_classes=cfg.data.n_classes,
-        batch_size=cfg.data.batch_size,
-        num_workers=cfg.data.num_workers,
-        val_split=cfg.data.val_split,
-        seed=cfg.seed,
-    )
-
-    # --- Model ---
-    model = ExampleModel(
-        n_features=cfg.model.n_features,
-        hidden_dim=cfg.model.hidden_dim,
-        n_classes=cfg.model.n_classes,
-    )
-    model = fabric.setup(model)
+    # --- Data + Model (the same seams train.py uses) ---
+    loaders = create_dataloaders(cfg.data, seed=cfg.seed)
+    model = fabric.setup(build_model(cfg.model))
     val_loader = fabric.setup_dataloaders(loaders.val)
 
     # --- Load checkpoint ---
