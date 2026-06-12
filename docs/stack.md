@@ -32,7 +32,7 @@ flowchart TB
 |---|---|---|
 | Packaging | **uv** | Won the ecosystem; lockfiles + CUDA wheel routing built in |
 | Config | **pydantic + tyro** (utils/cli.py) | Typed, IDE-checked configs with Hydra's CLI ergonomics kept |
-| Sweeps / SLURM | **submitit + optuna** (~150 lines of owned glue) | No frozen plugins; every line readable |
+| Sweeps / SLURM | **submitit + optuna** (owned glue scripts) | No frozen plugins; every line readable |
 | Training | **Lightning Fabric** (own loop) | Distributed/AMP plumbing without a Trainer black box |
 | Framework | **PyTorch** default, **JAX** optional | Ecosystem by default; XLA + explicit keys when a project wants them |
 | Caching | **exca + codever** (tabular) | Benchmark cells memoized, keyed to config *and* code version |
@@ -52,8 +52,8 @@ best:
 - the free-order `key=value` CLI with group swaps — `experiment=example loss=contrastive model.lr=1e-3` still works verbatim, now typo-checked at parse time
 - `${...}` interpolation — replaced by one visible `resolved()` method in code, still supported inside `configs/local.yaml`
 
-What Hydra's launcher/sweeper plugins did is now ~150 lines of owned glue
-(`sweep.py`, `tune.py`, `run_dir.py`) on actively maintained deps.
+What Hydra's launcher/sweeper plugins did is now a few hundred lines of owned
+glue (`sweep.py`, `tune.py`, `run_dir.py`) on actively maintained deps.
 
 ## Lightning Fabric, not Trainer
 

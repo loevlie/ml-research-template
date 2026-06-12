@@ -174,8 +174,8 @@ Std:    0.0285
 
 That's the line that goes in the paper: **0.621 ± 0.029 (5 seeds)** — and when
 you have a baseline to beat, run it with the *same seeds* and pass
-`--baseline` to get the paired Wilcoxon test and effect size
-([details](workflows/multi-seed-stats.md)).
+`--baseline` to get the paired significance test and effect size
+([how](workflows/multi-seed-stats.md) · [what the numbers mean](workflows/stats-explained.md)).
 
 ## Where to go from here
 

@@ -120,7 +120,7 @@ Ten prompts, thirty seconds: git initialized, dependencies locked, pre-commit in
 
 - :material-close:{ .cross } want a callback-driven `Trainer` — use [lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template)
 - :material-close:{ .cross } work in TensorFlow
-- :material-close:{ .cross } won't own ~150 lines of config/CLI plumbing
+- :material-close:{ .cross } don't want to own the CLI code (one ~250-line file you can read)
 - :material-close:{ .cross } need multi-node pretraining scaffolding — crib [torchtitan](https://github.com/pytorch/torchtitan)
 </div>
 

@@ -15,7 +15,7 @@ flowchart LR
 
 ```bash
 # locally, sequential
-bash scripts/run_seeds.sh experiment=ours seeds="42,123,456,789,1337"
+bash scripts/run_seeds.sh experiment=ours seeds="42,123,456,789,1337,7,31,99"
 
 # on SLURM, parallel (one array task per seed)
 sbatch scripts/sbatch_seeds.sh experiment=ours
@@ -26,7 +26,7 @@ Each seed writes `outputs/multi_seed_<stamp>/seed_<s>/metrics.json` (train.py sa
 For a **paired** comparison, run the baseline with the *same seeds*:
 
 ```bash
-bash scripts/run_seeds.sh experiment=baseline seeds="42,123,456,789,1337"
+bash scripts/run_seeds.sh experiment=baseline seeds="42,123,456,789,1337,7,31,99"
 ```
 
 ## 2. Aggregate
@@ -57,11 +57,11 @@ Significant at p<0.01
 - **Wilcoxon signed-rank** by default (non-parametric, paired); falls back to a paired t-test below 6 seeds, where Wilcoxon can't reach significance anyway.
 - **Cohen's d** so reviewers see magnitude, not just a p-value.
 
-The functions take plain lists — reuse them for any paired comparison (per-dataset benchmark scores, ablations), as the [tabular benchmark aggregator](tabular-benchmarking.md) does.
+The functions take plain lists — reuse them for any paired comparison (per-dataset benchmark scores, ablations), as the [tabular benchmark aggregator](tabular-benchmarking.md) does. What each of these numbers actually tells you — and when it misleads — is on [Statistics, explained](stats-explained.md).
 
 ## Reporting checklist
 
-- Report `mean ± std (N seeds)` and the test used: *"0.923 ± 0.005 vs 0.891 ± 0.005, p < 0.01, Wilcoxon signed-rank over 5 shared seeds."*
+- Report `mean ± std (N seeds)` and the test used: *"0.923 ± 0.005 vs 0.891 ± 0.005, p < 0.01, Wilcoxon signed-rank over 8 shared seeds."*
 - Same seeds for both methods — that's what "paired" means.
-- 5 seeds is the floor for a claim; use more when the delta is small relative to the std.
+- 5 seeds is the floor for a claim (the aggregator uses a paired t-test there); 8+ lets Wilcoxon speak, and more is better when the delta is small relative to the std.
 - Decide the metric you'll test on **before** running.

@@ -60,7 +60,7 @@ Answer ~10 prompts, get a ready-to-train project: git initialized, deps locked, 
 
 - You want a Lightning `Trainer` black box → use [lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template).
 - You work in JAX/TF → not for you.
-- You don't want to read ~150 lines of config/CLI plumbing you now own → expect a learning curve.
+- You don't want to own the CLI code (one ~250-line file you can read) → use a framework instead.
 
 ## Updating an existing project
 

@@ -1,6 +1,6 @@
 # Configure with typed configs
 
-Configs are **pydantic models in `src/<pkg>/configs.py`** — typed, IDE-navigable, and validated. CLI parsing (`utils/cli.py`, ~150 lines on [tyro](https://github.com/brentyi/tyro)) keeps the Hydra-style syntax, so commands read exactly as before:
+Configs are **pydantic models in `src/<pkg>/configs.py`** — typed, IDE-navigable, and validated. CLI parsing (`utils/cli.py`, one ~250-line file on [tyro](https://github.com/brentyi/tyro)) keeps the Hydra-style syntax, so commands read exactly as before:
 
 ```bash
 uv run python src/<pkg>/train.py experiment=example loss=contrastive model.lr=1e-3

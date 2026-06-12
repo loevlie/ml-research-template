@@ -75,7 +75,7 @@ Win rate: 87%
 Test: Wilcoxon signed-rank, p=0.0001 ...
 ```
 
-Mean ranks, win rates, and the paired Wilcoxon across datasets are the standard cross-dataset summary in tabular-FM papers; the aggregator reuses the same `utils/stats.py` as the [multi-seed pipeline](multi-seed-stats.md).
+Mean ranks, win rates, and the paired Wilcoxon across datasets are the standard cross-dataset summary in tabular-FM papers; the aggregator reuses the same `utils/stats.py` as the [multi-seed pipeline](multi-seed-stats.md) — here each *dataset* is a pair, so the test asks whether the win pattern across 30 datasets could be luck ([what the numbers mean](stats-explained.md)).
 
 ## Ship your model the way the field expects
 
