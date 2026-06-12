@@ -12,5 +12,6 @@ __pycache__/
 # Demo recording source — kept local only, not committed
 demo.tape
 
-# MkDocs build output
+# MkDocs build output (+ social-card cache)
 /site/
+/.cache/

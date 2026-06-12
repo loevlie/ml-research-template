@@ -126,9 +126,17 @@ def run(cfg: TrainConfig) -> float:
     best_val_acc = float(state["best_val_acc"])
     patience_counter = int(state["patience_counter"])
 
-    fabric.print(f"Config:\n{cfg.model_dump_json(indent=2)}")
-    fabric.print(f"Output dir: {output_dir}")
-    fabric.print(f"Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    n_params = sum(p.numel() for p in model.parameters())
+    rule = "-" * 72
+    fabric.print(
+        f"{rule}\n"
+        f"run dir   {output_dir}\n"
+        f"model     {n_params:,} params | hidden_dim={cfg.model.hidden_dim} | lr={cfg.model.lr:g}\n"
+        f"trainer   max {cfg.trainer.max_epochs} epochs | {cfg.trainer.precision} | seed={cfg.seed}\n"
+        f"loss      {type(cfg.loss).__name__} | logger {cfg.logger.kind}\n"
+        f"config    {output_dir}/config.yaml (full snapshot + git state)\n"
+        f"{rule}"
+    )
 
     for epoch in range(start_epoch, cfg.trainer.max_epochs):
         train_loss = train_epoch(
@@ -181,7 +189,13 @@ def run(cfg: TrainConfig) -> float:
     for logger in fabric.loggers:
         logger.finalize("success")
 
-    fabric.print(f"Best val_loss={best_val_loss:.4f} | val_acc={best_val_acc:.4f}")
+    fabric.print(
+        f"{rule}\n"
+        f"best      val_loss={best_val_loss:.4f} | val_acc={best_val_acc:.4f}\n"
+        f"ckpts     {output_dir}/best.ckpt (+ last.ckpt)\n"
+        f"evaluate  uv run python src/{{ package_name }}/eval.py ckpt_path={output_dir}/best.ckpt\n"
+        f"{rule}"
+    )
     return best_val_acc
 
 

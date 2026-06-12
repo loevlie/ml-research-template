@@ -1,7 +1,8 @@
 site_name: ml-research-template
 site_description: >-
   A Copier template for ML research projects — PyTorch + Lightning Fabric +
-  Hydra + uv, with multi-seed significance testing and copier update baked in.
+  typed configs (pydantic + tyro) + uv, with multi-seed significance testing
+  and copier update baked in.
 site_url: https://loevlie.github.io/ml-research-template/
 repo_url: https://github.com/loevlie/ml-research-template
 repo_name: loevlie/ml-research-template
@@ -12,30 +13,53 @@ theme:
   icon:
     repo: fontawesome/brands/github
     logo: material/flask-outline
+  font:
+    text: Inter
+    code: JetBrains Mono
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
-      accent: indigo
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
-      accent: indigo
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Light mode
   features:
+    - navigation.tabs
     - navigation.sections
     - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
     - navigation.top
     - navigation.footer
+    - toc.follow
     - search.suggest
     - search.highlight
+    - search.share
     - content.code.copy
     - content.code.annotate
+    - content.tabs.link
+    - content.action.edit
+
+extra_css:
+  - stylesheets/extra.css
+
+plugins:
+  - search
+  - social:
+      enabled: !ENV [CI, false]
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/loevlie/ml-research-template
 
 markdown_extensions:
   - admonition
@@ -45,10 +69,19 @@ markdown_extensions:
   - toc:
       permalink: true
   - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
-  - pymdownx.superfences
+  - pymdownx.keys
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
 
@@ -58,7 +91,7 @@ nav:
   - The stack (and why): stack.md
   - Workflows:
       - Train & experiment: workflows/training.md
-      - Configure with Hydra: workflows/configs.md
+      - Typed configs & overrides: workflows/configs.md
       - Sweeps & HP search: workflows/sweeps.md
       - Run on SLURM: workflows/slurm.md
       - Checkpoints & resume: workflows/resume-checkpointing.md

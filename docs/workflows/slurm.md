@@ -35,6 +35,13 @@ run_dir="outputs/slurm_${SLURM_JOB_ID}" trainer.resume=auto
 
 `--requeue` means a preempted job is resubmitted **with the same job ID** → it lands in the same directory → `resume=auto` picks up `last.ckpt` (saved every epoch) and continues from the last finished epoch. No babysitting. Details in [Checkpoints & resume](resume-checkpointing.md).
 
+```mermaid
+flowchart LR
+    A["job 12345<br>epoch 17"] -->|preempted| B["requeued<br>same job ID"]
+    B --> C["outputs/slurm_12345/<br>same run dir"]
+    C -->|"resume=auto finds last.ckpt"| D["continues at<br>epoch 18"]
+```
+
 ## Tabular flavor: array benchmarks
 
 Tabular-FM evaluation is hundreds of small CPU jobs, not one big GPU run. `scripts/sbatch_benchmark.sh` maps an estimator × task × fold grid onto one SLURM array, and exca's cache means a re-submitted grid recomputes only missing cells — see [Tabular benchmarking](tabular-benchmarking.md).

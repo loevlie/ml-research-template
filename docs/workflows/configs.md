@@ -20,6 +20,14 @@ configs/local.yaml         # machine-local overrides (gitignored)
 
 Composition order (later wins): **preset → local.yaml → group swap → CLI key**.
 
+```mermaid
+flowchart LR
+    A["experiment=example<br><i>preset</i>"] --> B["configs/local.yaml<br><i>machine-local</i>"]
+    B --> C["loss=contrastive<br><i>group swap</i>"]
+    C --> D["model.lr=1e-3<br><i>key override</i>"]
+    D --> E(["validated TrainConfig"])
+```
+
 1. **Preset** — `experiment=example` selects a full config from `experiments.py`.
 2. **Machine-local** — `configs/local.yaml` (gitignored) applies on every run:
    ```yaml

@@ -4,6 +4,7 @@
 
 <p><i>A Copier template for ML research projects — PyTorch + Lightning Fabric + typed configs + uv,<br>with multi-seed significance testing and <code>copier update</code> baked in.</i></p>
 
+[![docs](https://github.com/loevlie/ml-research-template/actions/workflows/docs.yml/badge.svg)](https://loevlie.github.io/ml-research-template/)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Copier](https://img.shields.io/badge/templated%20with-copier-a48cdc)

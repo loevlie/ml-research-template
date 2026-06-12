@@ -3,29 +3,37 @@ _subdirectory: template
 _answers_file: .copier-answers.yml
 
 _message_after_copy: |
-  Project "{{ project_name }}" generated at {{ _copier_conf.dst_path }}
+  {%- set pad = 18 + package_name|length + 28 %}
+  {%- macro cmd(c) %}{{ c }}{{ " " * (pad - c|length if pad > c|length else 2) }}{% endmacro %}
+  {%- set train = "uv run python src/" ~ package_name ~ "/train.py" %}
+  "{{ project_name }}" is ready at {{ _copier_conf.dst_path }}
+  (with --trust, git init + uv sync + pre-commit install already ran)
 
-  Next steps:
+  Try it:
     cd {{ _copier_conf.dst_path }}
-    uv sync --extra dev
-    uv run pre-commit install
-    uv run python src/{{ package_name }}/train.py
+    {{ cmd(train) }}# train the reference model
+    {{ cmd(train ~ " --help") }}# every flag, preset, and variant
+    {{ cmd("uv run pytest") }}# smoke tests
   {%- if flavor == "tabular" %}
 
   Tabular flavor:
-    uv run python src/{{ package_name }}/benchmark.py            # one estimator x task x fold cell (cached)
-    bash scripts/run_benchmark.sh                                # local grid
-    uv sync --extra tabular-baselines                            # TabPFN + TabICL (TabPFN weights: non-commercial)
+    {{ cmd("uv run python src/" ~ package_name ~ "/benchmark.py") }}# one estimator x task x fold cell (cached)
+    {{ cmd("bash scripts/run_benchmark.sh") }}# the local grid
+    {{ cmd("uv sync --extra tabular-baselines") }}# add TabPFN + TabICL (TabPFN weights: non-commercial)
   {%- endif %}
   {%- if flavor == "multimodal" %}
 
   Multimodal flavor:
-    see src/{{ package_name }}/data/image_text.py and configs/loss/contrastive.yaml
+    {{ cmd(train ~ " loss=contrastive") }}# CLIP-style InfoNCE objective
+    {{ cmd("src/" ~ package_name ~ "/data/image_text.py") }}# image-text loaders (HF datasets)
   {%- endif %}
+
+  Docs (workflows, configs, SLURM, stats): https://loevlie.github.io/ml-research-template/
 
 _message_after_update: |
   Project "{{ project_name }}" updated to template v{{ _copier_conf.vcs_ref_hash }}
-  Resolve any .rej files or conflict markers, then commit.
+  Resolve any .rej files or conflict markers, then run the tests and commit.
+  What changed: https://github.com/loevlie/ml-research-template/commits/main
 
 _skip_if_exists:
   # Files users typically edit heavily — don't clobber on `copier update`.
