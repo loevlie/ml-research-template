@@ -28,7 +28,7 @@ Resolve them like any merge, run the tests, commit.
 Re-run with new answers (e.g. switching default logger, or adopting a flavor):
 
 ```bash
-copier update --trust -d logger=trackio
+copier update --trust -d logger=trackio   # changes the default tracker
 copier update --trust -d flavor=tabular     # adds the benchmark harness to an existing project
 ```
 

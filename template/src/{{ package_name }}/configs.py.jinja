@@ -1,0 +1,170 @@
+"""Typed experiment configs (pydantic) — the schema your IDE and CI check.
+
+These replace a YAML config tree: every field is typed, jump-to-definition
+works, and a typo'd override is a parse-time error with a suggestion. CLI
+parsing keeps Hydra's ergonomics via utils/cli.py::
+
+    python src/{{ package_name }}/train.py experiment=example loss=contrastive model.lr=1e-3
+
+Derived fields (the ``${...}`` interpolation replacement): fields like
+``ModelConfig.n_features`` default to None and are filled from sibling
+configs in ``TrainConfig.resolved()`` — one visible place, plain Python.
+
+Swappable groups (Hydra config groups replacement): union-typed fields with
+a variant registry in GROUPS, e.g. ``loss=contrastive`` on the CLI. Add a
+variant by defining a config class with a ``build()`` and registering it.
+
+Experiment presets live in experiments.py.
+"""
+
+from pathlib import Path
+from typing import Literal
+
+import pydantic
+
+from {{ package_name }}.objectives import ContrastiveObjective, Objective, SupervisedObjective
+
+
+class DataConfig(pydantic.BaseModel):
+    n_samples: int = 1000
+    n_features: int = 32
+    n_classes: int = 10
+    batch_size: int = 64
+    num_workers: int = 4
+    val_split: float = 0.2
+
+
+class ModelConfig(pydantic.BaseModel):
+    hidden_dim: int = 128
+    lr: float = 3e-4
+    weight_decay: float = 1e-5
+    # Derived from DataConfig in TrainConfig.resolved() unless set explicitly.
+    n_features: int | None = None
+    n_classes: int | None = None
+
+
+class SchedulerConfig(pydantic.BaseModel):
+    name: Literal["none", "cosine", "constant"] = "none"
+    warmup_steps: int = 0
+    min_lr_ratio: float = 0.0  # cosine floor, as fraction of base LR
+
+
+class TrainerConfig(pydantic.BaseModel):
+    accelerator: str = "auto"
+    devices: int | Literal["auto"] = "auto"
+    precision: Literal["32-true", "16-mixed", "bf16-mixed", "bf16-true", "64-true"] = "32-true"
+    max_epochs: int = 100
+    patience: int = 10  # early stopping
+    accumulate_grad_batches: int = 1  # optimizer steps once every N batches
+    gradient_clip_val: float | None = 1.0  # max grad norm per step; None disables
+    resume: str | None = None  # None | "auto" (look in run_dir) | /path/to/last.ckpt
+    scheduler: SchedulerConfig = SchedulerConfig()
+
+
+# --- objectives (swap via `loss=<variant>`; see GROUPS below) -----------------
+
+
+class SupervisedLossConfig(pydantic.BaseModel):
+    label_smoothing: float = 0.0
+
+    def build(self) -> Objective:
+        return SupervisedObjective(label_smoothing=self.label_smoothing)
+
+
+class ContrastiveLossConfig(pydantic.BaseModel):
+    """Symmetric InfoNCE — needs a pair-yielding DataLoader and a two-tower model."""
+
+    temperature: float = 0.07
+
+    def build(self) -> Objective:
+        return ContrastiveObjective(temperature=self.temperature)
+
+
+LossConfig = SupervisedLossConfig | ContrastiveLossConfig
+
+
+# --- tracking (switch via `logger.kind=<kind>`) --------------------------------
+
+
+class LoggerConfig(pydantic.BaseModel):
+    kind: Literal["wandb", "trackio", "tensorboard", "csv"] = "{{ logger }}"
+    project: str = "{{ package_name }}"
+
+    def build(self, run_dir: Path):
+        """Instantiate the Fabric logger for `kind` (imports stay lazy)."""
+        if self.kind == "wandb":
+            try:
+                from wandb.integration.lightning.fabric import WandbLogger
+            except ImportError as e:
+                raise ImportError(
+                    "logger.kind=wandb needs wandb — run: uv sync --extra tracking-wandb"
+                ) from e
+
+            return WandbLogger(project=self.project, save_dir=str(run_dir))
+        if self.kind == "trackio":
+            try:
+                import trackio  # noqa: F401 — fail before training, not at first log
+            except ImportError as e:
+                raise ImportError(
+                    "logger.kind=trackio needs trackio — run: uv sync --extra tracking-trackio"
+                ) from e
+            from {{ package_name }}.utils.trackio_logger import TrackioLogger
+
+            return TrackioLogger(project=self.project)
+        if self.kind == "tensorboard":
+            from lightning.fabric.loggers import TensorBoardLogger
+
+            return TensorBoardLogger(root_dir=str(run_dir), name="tensorboard")
+        from lightning.fabric.loggers import CSVLogger
+
+        return CSVLogger(root_dir=str(run_dir), name="csv_logs")
+
+
+# --- root ---------------------------------------------------------------------
+
+
+class TrainConfig(pydantic.BaseModel):
+    seed: int = 42
+    deterministic: bool = True
+    run_dir: str | None = None  # None → outputs/<date>/<time>; pin for SLURM/resume
+    data: DataConfig = DataConfig()
+    model: ModelConfig = ModelConfig()
+    trainer: TrainerConfig = TrainerConfig()
+    loss: LossConfig = SupervisedLossConfig()
+    logger: LoggerConfig = LoggerConfig()
+
+    def resolved(self) -> "TrainConfig":
+        """Fill derived fields from sibling configs (the `${...}` replacement)."""
+        cfg = self.model_copy(deep=True)
+        if cfg.model.n_features is None:
+            cfg.model.n_features = cfg.data.n_features
+        if cfg.model.n_classes is None:
+            cfg.model.n_classes = cfg.data.n_classes
+        return cfg
+
+
+class EvalConfig(pydantic.BaseModel):
+    ckpt_path: str  # required: eval.py ckpt_path=/path/to/best.ckpt
+    seed: int = 42
+    data: DataConfig = DataConfig()
+    model: ModelConfig = ModelConfig()
+    accelerator: str = "auto"
+    devices: int | Literal["auto"] = "auto"
+    precision: Literal["32-true", "16-mixed", "bf16-mixed", "bf16-true", "64-true"] = "32-true"
+
+    def resolved(self) -> "EvalConfig":
+        cfg = self.model_copy(deep=True)
+        if cfg.model.n_features is None:
+            cfg.model.n_features = cfg.data.n_features
+        if cfg.model.n_classes is None:
+            cfg.model.n_classes = cfg.data.n_classes
+        return cfg
+
+
+# Swappable config groups: `<field>=<variant>` on any entry point's CLI.
+GROUPS: dict[str, dict[str, type[pydantic.BaseModel]]] = {
+    "loss": {
+        "supervised": SupervisedLossConfig,
+        "contrastive": ContrastiveLossConfig,
+    },
+}

@@ -1,0 +1,120 @@
+"""Optuna hyperparameter search (replaces the Hydra Optuna sweeper).
+
+    # local, sequential
+    python scripts/tune.py --n-trials 20
+
+    # 8 parallel SLURM workers sharing one study (needs: uv sync --extra cluster)
+    python scripts/tune.py --n-trials 64 --workers 8 --cluster slurm --partition gpu
+
+Edit suggest() below to define the search space. Workers coordinate through
+Optuna's JournalFileBackend on the shared filesystem — no database server
+needed (and SQLite-over-NFS explicitly does not work; don't swap it in).
+"""
+
+from pathlib import Path
+from typing import Literal
+
+import optuna
+import pydantic
+import tyro
+from optuna.storages import JournalStorage
+from optuna.storages.journal import JournalFileBackend
+
+from {{ package_name }}.configs import GROUPS, TrainConfig
+from {{ package_name }}.experiments import EXPERIMENTS
+from {{ package_name }}.train import run
+from {{ package_name }}.utils import cli
+
+
+class TuneSettings(pydantic.BaseModel):
+    study: str = "tune"
+    n_trials: int = 20
+    direction: Literal["maximize", "minimize"] = "maximize"
+    storage: str = "outputs/optuna/{study}.log"  # JournalFileBackend on shared FS
+    cluster: Literal["local", "slurm"] = "local"
+    # SLURM (cluster=slurm)
+    workers: int = 4
+    partition: str | None = None
+    account: str | None = None
+    gpus_per_node: int = 1
+    cpus_per_task: int = 8
+    mem_gb: int = 64
+    timeout_min: int = 1440
+
+
+def suggest(trial: optuna.Trial) -> dict:
+    """The search space: dotted train-config overrides. Edit me."""
+    return {
+        "model": {
+            "lr": trial.suggest_float("model.lr", 1e-5, 1e-2, log=True),
+            "hidden_dim": trial.suggest_categorical("model.hidden_dim", [64, 128, 256, 512]),
+            "weight_decay": trial.suggest_float("model.weight_decay", 1e-6, 1e-3, log=True),
+        },
+        "data": {
+            "batch_size": trial.suggest_categorical("data.batch_size", [32, 64, 128, 256]),
+        },
+    }
+
+
+def _storage(settings: TuneSettings) -> JournalStorage:
+    path = Path(settings.storage.format(study=settings.study))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return JournalStorage(JournalFileBackend(str(path)))
+
+
+def _objective(settings: TuneSettings):
+    # compose the trial base exactly like train.py does (preset + local.yaml),
+    # and deep_merge never aliases preset sub-models across trials
+    base = cli.parse(TrainConfig, presets=EXPERIMENTS, groups=GROUPS, argv=[])
+
+    def objective(trial: optuna.Trial) -> float:
+        cfg = cli.deep_merge(base, suggest(trial))
+        cfg = cfg.model_copy(
+            update={"run_dir": f"outputs/tune_{settings.study}/trial_{trial.number:04d}"}
+        )
+        return run(cfg)
+
+    return objective
+
+
+def worker(settings: TuneSettings, n_trials: int) -> None:
+    study = optuna.load_study(study_name=settings.study, storage=_storage(settings))
+    study.optimize(_objective(settings), n_trials=n_trials)
+
+
+def main() -> None:
+    settings = tyro.cli(TuneSettings, description=__doc__ or "")
+    optuna.create_study(
+        study_name=settings.study,
+        storage=_storage(settings),
+        direction=settings.direction,
+        load_if_exists=True,
+    )
+
+    if settings.cluster == "local":
+        worker(settings, settings.n_trials)
+    else:
+        import submitit  # needs: uv sync --extra cluster
+
+        executor = submitit.AutoExecutor(folder=f"outputs/tune_{settings.study}/slurm_logs")
+        executor.update_parameters(
+            slurm_partition=settings.partition,
+            slurm_account=settings.account,
+            gpus_per_node=settings.gpus_per_node,
+            cpus_per_task=settings.cpus_per_task,
+            mem_gb=settings.mem_gb,
+            timeout_min=settings.timeout_min,
+            slurm_array_parallelism=settings.workers,
+        )
+        per_worker = -(-settings.n_trials // settings.workers)  # ceil division
+        with executor.batch():
+            jobs = [executor.submit(worker, settings, per_worker) for _ in range(settings.workers)]
+        print(f"tune: submitted {len(jobs)} workers x {per_worker} trials")
+        return
+
+    study = optuna.load_study(study_name=settings.study, storage=_storage(settings))
+    print(f"tune: best value {study.best_value:.4f} with {study.best_params}")
+
+
+if __name__ == "__main__":
+    main()

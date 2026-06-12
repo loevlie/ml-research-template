@@ -1,12 +1,12 @@
 # Experiment tracking
 
-Trackers are swappable Fabric loggers — pick a default at template time, switch any run with `logger=<name>`:
+Trackers are swappable Fabric loggers — pick a default at template time, switch any run with `logger.kind=<name>`:
 
 ```bash
-uv run python src/<pkg>/train.py logger=wandb        # cloud, collaboration
-uv run python src/<pkg>/train.py logger=trackio      # local-first, no account
-uv run python src/<pkg>/train.py logger=tensorboard  # local, basic
-uv run python src/<pkg>/train.py logger=csv          # flat files, zero deps
+uv run python src/<pkg>/train.py logger.kind=wandb        # cloud, collaboration
+uv run python src/<pkg>/train.py logger.kind=trackio      # local-first, no account
+uv run python src/<pkg>/train.py logger.kind=tensorboard  # local, basic
+uv run python src/<pkg>/train.py logger.kind=csv          # flat files, zero deps
 ```
 
 ## wandb (default)
@@ -35,11 +35,11 @@ HuggingFace's local-first tracker with a wandb-compatible API: runs live in a lo
 
 ```bash
 uv sync --extra tracking-trackio
-uv run python src/<pkg>/train.py logger=trackio
+uv run python src/<pkg>/train.py logger.kind=trackio
 uv run trackio show                                   # dashboard
 ```
 
-Fabric has no built-in trackio logger, so the template ships a ~50-line adapter (`src/<pkg>/utils/trackio_logger.py`). Optionally set `space_id` in `configs/logger/trackio.yaml` to mirror the dashboard to a HF Space.
+Fabric has no built-in trackio logger, so the template ships a ~50-line adapter (`src/<pkg>/utils/trackio_logger.py`). Optionally pass `space_id` to the adapter in `LoggerConfig.build()` (configs.py) to mirror the dashboard to a HF Space.
 
 ## tensorboard / csv
 

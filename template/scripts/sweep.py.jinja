@@ -1,0 +1,119 @@
+"""Cross-product sweeps (replaces Hydra's `-m` multirun).
+
+Any train.py override token works; comma-separated values fan out as a
+cross product:
+
+    # 6 local runs, sequential
+    python scripts/sweep.py seed=42,123,456 model.lr=1e-4,1e-3
+
+    # the same 6 runs as one SLURM job array (needs: uv sync --extra cluster)
+    python scripts/sweep.py --cluster slurm --partition gpu seed=42,123,456 model.lr=1e-4,1e-3
+
+    # constants pass through to every run
+    python scripts/sweep.py experiment=example loss=contrastive seed=1,2,3
+
+Each point runs `train.py` with a pinned run_dir and trainer.resume=auto, so
+preempted SLURM jobs requeue into the same directory and continue.
+
+For seed-only sweeps prefer scripts/run_seeds.sh / sbatch_seeds.sh — they
+write the seed_<s> layout that aggregate_seeds.py expects.
+"""
+
+import hashlib
+import itertools
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Literal
+
+import pydantic
+import tyro
+
+TRAIN = Path(__file__).parent.parent / "src" / "{{ package_name }}" / "train.py"
+
+
+class SweepSettings(pydantic.BaseModel):
+    cluster: Literal["local", "slurm"] = "local"
+    results_dir: str | None = None  # default: outputs/sweep_<timestamp>
+    # SLURM resources (cluster=slurm)
+    partition: str | None = None
+    account: str | None = None
+    gpus_per_node: int = 1
+    cpus_per_task: int = 8
+    mem_gb: int = 64
+    timeout_min: int = 1440
+    array_parallelism: int = 16  # max points running at once
+
+
+def expand(tokens: list[str]) -> list[list[str]]:
+    """Cross product over comma-valued key=value tokens."""
+    axes: list[list[str]] = []
+    for token in tokens:
+        if "=" in token and not token.startswith("-"):
+            key, value = token.split("=", 1)
+            axes.append([f"{key}={v}" for v in value.split(",")])
+        else:
+            axes.append([token])
+    return [list(point) for point in itertools.product(*axes)]
+
+
+def main() -> None:
+    # split argv: key=value tokens go to train.py; everything else (flags AND
+    # their space-separated values, e.g. "--partition gpu") goes to tyro
+    tokens = [t for t in sys.argv[1:] if "=" in t and not t.startswith("-")]
+    flags = [t for t in sys.argv[1:] if t not in tokens]
+    settings = tyro.cli(SweepSettings, args=flags, description=__doc__ or "")
+
+    points = expand(tokens)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    results_dir = Path(settings.results_dir or f"outputs/sweep_{stamp}")
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    commands = []
+    for i, point in enumerate(points):
+        # name dirs by override content, not grid position: editing the grid
+        # can never silently attribute an old run's results to a new config
+        digest = hashlib.sha1(" ".join(point).encode()).hexdigest()[:8]
+        run_dir = results_dir / f"run_{i:03d}_{digest}"
+        commands.append(
+            [sys.executable, str(TRAIN), *point, f"run_dir={run_dir}", "trainer.resume=auto"]
+        )
+
+    print(f"sweep: {len(points)} points -> {results_dir} ({settings.cluster})")
+    for i, point in enumerate(points):
+        print(f"  run_{i:03d}: {' '.join(point) or '(defaults)'}")
+
+    if settings.cluster == "local":
+        failed = []
+        for i, cmd in enumerate(commands):
+            if subprocess.run(cmd).returncode != 0:
+                print(f"sweep: point {i} failed — continuing", file=sys.stderr)
+                failed.append(i)
+        status = f"{len(failed)} of {len(commands)} points FAILED: {failed}" if failed else "done"
+        print(f"sweep: {status} — results in {results_dir}")
+        if failed:
+            sys.exit(1)
+        return
+
+    import submitit  # needs: uv sync --extra cluster
+
+    executor = submitit.AutoExecutor(folder=str(results_dir / "slurm_logs"))
+    executor.update_parameters(
+        slurm_partition=settings.partition,
+        slurm_account=settings.account,
+        gpus_per_node=settings.gpus_per_node,
+        cpus_per_task=settings.cpus_per_task,
+        mem_gb=settings.mem_gb,
+        timeout_min=settings.timeout_min,
+        slurm_array_parallelism=settings.array_parallelism,
+        slurm_additional_parameters={"requeue": True},
+    )
+    with executor.batch():  # one SLURM array for the whole sweep
+        jobs = [executor.submit(submitit.helpers.CommandFunction(cmd)) for cmd in commands]
+    print(f"sweep: submitted array {jobs[0].job_id.split('_')[0]} ({len(jobs)} tasks)")
+    print(f"sweep: logs in {results_dir / 'slurm_logs'}")
+
+
+if __name__ == "__main__":
+    main()

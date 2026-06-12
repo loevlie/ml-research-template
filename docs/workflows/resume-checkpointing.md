@@ -15,7 +15,7 @@ Both go through `fabric.save`, so they're DDP-safe and load anywhere (`fabric.lo
 
 ```bash
 # pick up last.ckpt from this run dir if present (no-op otherwise)
-uv run python src/<pkg>/train.py hydra.run.dir=outputs/myrun trainer.resume=auto
+uv run python src/<pkg>/train.py run_dir=outputs/myrun trainer.resume=auto
 
 # resume from an explicit checkpoint
 uv run python src/<pkg>/train.py trainer.resume=outputs/2026-06-11/10-30-00/last.ckpt
@@ -37,7 +37,7 @@ The sbatch scripts make resume hands-free by pinning the run dir to the job ID:
 
 ```bash
 srun torchrun ... src/<pkg>/train.py \
-    hydra.run.dir="outputs/slurm_${SLURM_JOB_ID}" \
+    run_dir="outputs/slurm_${SLURM_JOB_ID}" \
     trainer.resume=auto "$@"
 ```
 

@@ -1,3 +1,0 @@
-# Sanity-check baseline: if a foundation model doesn't beat this, stop.
-_target_: sklearn.linear_model.LogisticRegression
-max_iter: 1000

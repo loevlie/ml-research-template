@@ -69,6 +69,6 @@ Every run lands in `outputs/<date>/<time>/` with the resolved config, logs, `bes
 1. Replace `src/<pkg>/data/datamodule.py` with your dataset (keep the seeded-split pattern).
 2. Replace `src/<pkg>/models/module.py` with your architecture (keep the `@jaxtyped` shape annotations).
 3. If your loss isn't plain cross-entropy, add an objective — see [Train & experiment](workflows/training.md).
-4. Update `configs/data/default.yaml` and `configs/model/default.yaml` to match.
+4. Update `DataConfig` / `ModelConfig` in `src/<pkg>/configs.py` to match.
 
 These files are listed in the template's `_skip_if_exists`, so future [`copier update`](updating.md) runs never overwrite them.

@@ -34,7 +34,7 @@ for est in "${ESTIMATORS[@]}"; do
             echo ">>> ${est} / task ${task} / fold ${fold}"
             python src/{{ package_name }}/benchmark.py \
                 estimator="$est" task_id="$task" fold="$fold" \
-                hydra.run.dir="${RESULTS_DIR}/${est}/task_${task}/fold_${fold}" \
+                run_dir="${RESULTS_DIR}/${est}/task_${task}/fold_${fold}" \
                 "$@"
         done
     done

@@ -1,67 +1,87 @@
-# Configure with Hydra
+# Configure with typed configs
+
+Configs are **pydantic models in `src/<pkg>/configs.py`** — typed, IDE-navigable, and validated. CLI parsing (`utils/cli.py`, ~150 lines on [tyro](https://github.com/brentyi/tyro)) keeps the Hydra-style syntax, so commands read exactly as before:
+
+```bash
+uv run python src/<pkg>/train.py experiment=example loss=contrastive model.lr=1e-3
+```
+
+The difference is *when errors happen*: a typo'd key now dies at parse time with a suggestion, and your editor autocompletes config fields.
 
 ## Layout
 
 ```
-configs/
-├── train.yaml          # composition root
-├── eval.yaml
-├── data/default.yaml       # one file per option in each group
-├── model/default.yaml
-├── trainer/default.yaml
-├── loss/{supervised,contrastive}.yaml
-├── logger/{wandb,trackio,tensorboard,csv}.yaml
-├── experiment/         # named experiments (version-controlled)
-├── hparams_search/optuna.yaml
-├── launcher/{slurm,slurm_debug}.yaml
-└── local/default.yaml      # machine-specific, gitignored
+src/<pkg>/configs.py       # the schema: DataConfig, ModelConfig, TrainerConfig, ...
+src/<pkg>/experiments.py   # named presets (replaces configs/experiment/*.yaml)
+configs/local.yaml         # machine-local overrides (gitignored)
 ```
 
-`train.yaml` declares which member of each group to compose:
+## The four override levels
+
+Composition order (later wins): **preset → local.yaml → group swap → CLI key**.
+
+1. **Preset** — `experiment=example` selects a full config from `experiments.py`.
+2. **Machine-local** — `configs/local.yaml` (gitignored) applies on every run:
+   ```yaml
+   data:
+     num_workers: 0   # laptop
+   ```
+3. **Group swap** — `loss=contrastive` replaces a whole typed config block. Variants are registered in `GROUPS` in `configs.py`.
+4. **Key override** — `model.lr=1e-3 trainer.max_epochs=50`, any nesting depth, free order.
+
+## Experiments are Python now
+
+```python title="src/<pkg>/experiments.py"
+EXPERIMENTS = {
+    "base": TrainConfig(),
+    "example": TrainConfig(
+        data=DataConfig(batch_size=128),
+        model=ModelConfig(hidden_dim=256, lr=1e-3),
+        trainer=TrainerConfig(max_epochs=50),
+    ),
+}
+```
+
+Building variants is ordinary code — `model_copy(update=...)`, loops over widths, helper functions — no YAML inheritance rules. Diffs in PRs stay just as reviewable, and pyright checks every preset.
+
+## Derived values (the `${...}` replacement)
+
+Fields that used to interpolate (`n_features: ${data.n_features}`) are now `None`-defaulted and filled in one visible place:
+
+```python title="configs.py"
+class ModelConfig(pydantic.BaseModel):
+    n_features: int | None = None   # derived from DataConfig unless set
+
+class TrainConfig(pydantic.BaseModel):
+    def resolved(self) -> "TrainConfig":
+        cfg = self.model_copy(deep=True)
+        if cfg.model.n_features is None:
+            cfg.model.n_features = cfg.data.n_features
+        return cfg
+```
+
+Inside `configs/local.yaml`, literal `${a.b}` strings still work — they resolve against the composed config:
 
 ```yaml
-defaults:
-  - _self_
-  - data: default
-  - model: default
-  - trainer: default
-  - loss: supervised
-  - logger: wandb
-  - experiment: null      # opt-in overrides
-  - local: default        # always last → machine-specific wins
+model:
+  hidden_dim: ${data.n_features}
 ```
 
-## The three override levels
+## Adding a swappable variant
 
-1. **Group swap** — `loss=contrastive`, `logger=csv`: replaces a whole file.
-2. **Key override** — `model.lr=1e-3`, `trainer.max_epochs=5`: surgical, from the CLI.
-3. **Experiment file** — `experiment=wider_net`: a named, committed bundle of overrides. Use this for anything you might put in a paper.
-
-## Interpolation
-
-Configs reference each other, so shared values live in one place:
-
-```yaml title="configs/model/default.yaml"
-n_features: ${data.n_features}   # stays in sync with the dataset config
-n_classes: ${data.n_classes}
-```
-
-## `local/` — machine-specific, gitignored
-
-Anything that differs between your laptop and the cluster (worker counts, SLURM account, data roots) goes in `configs/local/default.yaml`. It composes last, wins over everything, and never pollutes the repo:
-
-```yaml title="configs/local/default.yaml"
-data:
-  num_workers: 0   # laptop
-```
+1. Define a config class with a `build()` in `configs.py`:
+   ```python
+   class MaskedLossConfig(pydantic.BaseModel):
+       mask_ratio: float = 0.15
+       def build(self):
+           return MaskedColumnObjective(mask_ratio=self.mask_ratio)
+   ```
+2. Add it to the union and register it: `GROUPS["loss"]["masked"] = MaskedLossConfig`.
+3. `loss=masked loss.mask_ratio=0.3` now works on every entry point.
 
 ## Reproducibility
 
-Hydra snapshots the **resolved** config of every run into `outputs/<run>/.hydra/config.yaml` — six months later you can re-run any result exactly:
-
-```bash
-uv run python src/<pkg>/train.py --config-dir outputs/<run>/.hydra --config-name config
-```
+Every run writes `config.yaml` into its run directory — the fully-resolved config plus git SHA, dirty flag, and the exact argv (`utils/run_dir.py`). Re-running a result months later is a file read, not archaeology.
 
 !!! tip "Debugging composition"
-    `uv run python src/<pkg>/train.py --cfg job` prints the composed config without running anything. `--info defaults` shows where each value came from.
+    `python train.py --help` lists every flag with its current default, plus the available experiments and group variants.

@@ -51,7 +51,7 @@ for seed in "${SEED_ARRAY[@]}"; do
     python src/{{ package_name }}/train.py \
         seed="$seed" \
         "${FORWARD_ARGS[@]}" \
-        hydra.run.dir="${RESULTS_DIR}/seed_${seed}" \
+        run_dir="${RESULTS_DIR}/seed_${seed}" \
         2>&1 | tee "${RESULTS_DIR}/seed_${seed}.log"
     echo ">>> Finished seed=${seed}"
 done

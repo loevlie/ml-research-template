@@ -6,8 +6,8 @@ training loop stays a tiny orchestrator. Each Objective owns:
   - what loss to return
   - (optionally) what intermediates to surface for metrics/logging
 
-Swap objectives via Hydra:  `python train.py loss=contrastive`
-Configs live in `configs/loss/`.
+Swap objectives from the CLI:  `python train.py loss=contrastive`
+Config classes live in `configs.py` (GROUPS registers the variants).
 
 Contract
 --------
@@ -28,7 +28,8 @@ just omit these keys and the accuracy branch stays inactive.
 Adding a new objective
 ----------------------
 1. Define a class with `__call__(model, batch) -> dict`.
-2. Create `configs/loss/<name>.yaml` with `_target_: <pkg>.objectives.YourObj`.
+2. Add a config class with a `build()` in `configs.py` and register it in
+   `GROUPS["loss"]` — `loss=<name>` then works on every entry point.
 3. If your batch structure differs from `(x, y)`, pair with a matching
    DataLoader (contrastive → pairs; masked-prediction → (x, mask, y); etc.).
 """

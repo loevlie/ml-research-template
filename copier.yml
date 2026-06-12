@@ -13,7 +13,7 @@ _message_after_copy: |
   {%- if flavor == "tabular" %}
 
   Tabular flavor:
-    uv run python src/{{ package_name }}/benchmark.py            # one estimator x task x fold cell
+    uv run python src/{{ package_name }}/benchmark.py            # one estimator x task x fold cell (cached)
     bash scripts/run_benchmark.sh                                # local grid
     uv sync --extra tabular-baselines                            # TabPFN + TabICL (TabPFN weights: non-commercial)
   {%- endif %}
@@ -36,13 +36,10 @@ _skip_if_exists:
   - "src/{{ package_name }}/data/image_text.py"
   - "src/{{ package_name }}/objectives.py"
   - "src/{{ package_name }}/sklearn_wrapper.py"
-  - "configs/experiment/example.yaml"
-  - "configs/data/default.yaml"
-  - "configs/model/default.yaml"
-  - "configs/loss/supervised.yaml"
-  - "configs/loss/contrastive.yaml"
-  - "configs/estimator/*.yaml"
-  - "configs/benchmark.yaml"
+  - "src/{{ package_name }}/configs.py"
+  - "src/{{ package_name }}/experiments.py"
+  - "src/{{ package_name }}/benchmark.py"
+  - "configs/local.yaml"
   - "README.md"
 
 _exclude:

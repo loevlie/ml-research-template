@@ -39,9 +39,8 @@ data/processed/*
 *.bin
 
 # Local machine-specific configs (keep the committed default.yaml stub,
-# ignore any other local yamls you create for your own machine)
-configs/local/*.yaml
-!configs/local/default.yaml
+# ignore machine-local overrides (applied by utils/cli.py before CLI args)
+configs/local.yaml
 
 # OS
 .DS_Store

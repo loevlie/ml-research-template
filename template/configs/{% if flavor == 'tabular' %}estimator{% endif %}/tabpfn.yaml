@@ -1,4 +1,0 @@
-# TabPFN foundation-model baseline.
-# Needs: uv sync --extra tabular-baselines
-# NOTE: TabPFN weights are licensed for non-commercial research use.
-_target_: tabpfn.TabPFNClassifier

@@ -1,0 +1,125 @@
+"""Regression tests for the Hydra-style CLI shim (utils/cli.py)."""
+
+import pytest
+
+from {{ package_name }}.configs import GROUPS, ContrastiveLossConfig, EvalConfig, TrainConfig
+from {{ package_name }}.experiments import EXPERIMENTS
+from {{ package_name }}.utils import cli
+
+
+def parse(argv, **kwargs):
+    kwargs.setdefault("presets", EXPERIMENTS)
+    kwargs.setdefault("groups", GROUPS)
+    kwargs.setdefault("local_yaml", "does/not/exist.yaml")
+    return cli.parse(TrainConfig, argv=argv, **kwargs)
+
+
+# ---- booleans via key=value ----
+
+
+@pytest.mark.parametrize(
+    "token,expected",
+    [
+        ("deterministic=false", False),
+        ("deterministic=true", True),
+        ("deterministic=0", False),
+        ("deterministic=1", True),
+        ("deterministic=no", False),
+        ("deterministic=YES", True),
+    ],
+)
+def test_bool_key_value(token, expected):
+    assert parse([token]).deterministic is expected
+
+
+def test_bool_invalid_value_exits():
+    with pytest.raises(SystemExit):
+        parse(["deterministic=maybe"])
+
+
+def test_native_no_flag_still_works():
+    assert parse(["--no-deterministic"]).deterministic is False
+
+
+# ---- null for optional fields ----
+
+
+def test_null_for_optional_fields():
+    cfg = parse(["run_dir=null", "trainer.resume=null", "trainer.gradient_clip_val=null"])
+    assert cfg.run_dir is None
+    assert cfg.trainer.resume is None
+    assert cfg.trainer.gradient_clip_val is None
+
+
+# ---- groups, presets, overrides ----
+
+
+def test_group_swap_with_member_override():
+    cfg = parse(["loss=contrastive", "loss.temperature=0.2", "seed=9"])
+    assert isinstance(cfg.loss, ContrastiveLossConfig)
+    assert cfg.loss.temperature == 0.2
+    assert cfg.seed == 9
+
+
+def test_preset_selection():
+    cfg = parse(["experiment=base", "model.lr=1e-3"])
+    assert cfg.model.lr == 1e-3
+
+
+def test_typo_exits():
+    with pytest.raises(SystemExit):
+        parse(["model.lrr=1e-3"])
+
+
+def test_unknown_group_variant_exits():
+    with pytest.raises(SystemExit):
+        parse(["loss=nonexistent"])
+
+
+# ---- local.yaml ----
+
+
+def test_local_yaml_merges_with_interpolation(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "configs").mkdir()
+    (tmp_path / "configs" / "local.yaml").write_text(
+        "data:\n  num_workers: 0\nmodel:\n  hidden_dim: ${data.n_features}\n"
+    )
+    cfg = parse(["trainer.max_epochs=1"], local_yaml="configs/local.yaml")
+    assert cfg.data.num_workers == 0
+    assert cfg.model.hidden_dim == cfg.data.n_features
+    # CLI still wins over local.yaml
+    cfg = parse(["data.num_workers=2"], local_yaml="configs/local.yaml")
+    assert cfg.data.num_workers == 2
+
+
+def test_local_yaml_applies_without_presets(tmp_path, monkeypatch):
+    """eval.py-style entry points (required fields, no presets) honor local.yaml."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "configs").mkdir()
+    (tmp_path / "configs" / "local.yaml").write_text("data:\n  num_workers: 0\n")
+    cfg = cli.parse(EvalConfig, argv=["ckpt_path=/tmp/x.ckpt"], local_yaml="configs/local.yaml")
+    assert cfg.data.num_workers == 0
+    assert cfg.ckpt_path == "/tmp/x.ckpt"
+    with pytest.raises(SystemExit):  # required field still required
+        cli.parse(EvalConfig, argv=[], local_yaml="configs/local.yaml")
+
+
+def test_local_yaml_unknown_key_fails_loudly(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "configs").mkdir()
+    (tmp_path / "configs" / "local.yaml").write_text("resolved: 1\n")  # method name, not a field
+    with pytest.raises(KeyError, match="unknown config key"):
+        parse([], local_yaml="configs/local.yaml")
+
+
+# ---- preset isolation ----
+
+
+def test_presets_never_polluted_across_parses():
+    before = EXPERIMENTS["base"].model_dump()
+    cfg = parse(["model.lr=0.5", "trainer.max_epochs=1"])
+    cfg.trainer.scheduler.warmup_steps = 999  # mutate the parsed copy
+    cfg2 = cli.deep_merge(EXPERIMENTS["base"], {"model": {"lr": 0.9}})
+    cfg2.trainer.scheduler.warmup_steps = 777
+    assert EXPERIMENTS["base"].model_dump() == before

@@ -9,8 +9,7 @@ Tabular foundation-model research has an unusual shape: evaluation is **hundreds
 ```
 src/<pkg>/data/openml_data.py   # OpenML task → TaskSplit (standardized CV folds)
 src/<pkg>/sklearn_wrapper.py    # your torch model behind fit/predict_proba
-src/<pkg>/benchmark.py          # one (estimator, task, fold) cell → metrics.json
-configs/estimator/              # logreg, mlp, tabpfn, tabicl — Hydra-instantiated
+src/<pkg>/benchmark.py          # typed estimator configs + one cell → metrics.json
 scripts/run_benchmark.sh        # local grid loop
 scripts/sbatch_benchmark.sh     # the same grid as one SLURM array
 scripts/aggregate_benchmark.py  # tables, mean ranks, win rates, paired Wilcoxon
@@ -71,13 +70,9 @@ Mean ranks, win rates, and the paired Wilcoxon across datasets are the standard 
 
 `sklearn_wrapper.py` shows the pattern: your torch model behind `BaseEstimator` (`fit/predict/predict_proba`, params stored verbatim, fitted state in `*_` attributes). That makes it a drop-in for this harness, sklearn CV, and **everyone else's eval code** — it's how TabPFN and TabICL got adopted. The flavor's tests include the sklearn-clone contract and a hypothesis-based row-permutation-invariance property test (the kind of invariant in-context tabular models must satisfy).
 
-## Cached cells (optional)
+## Cached cells (built in)
 
-```bash
-uv sync --extra caching   # exca + code-aware versioning
-```
-
-With the `caching` extra, each cell's result is memoized on disk by [exca](https://github.com/facebookresearch/exca), keyed on (estimator config, task, fold, seed, **code version**). Re-running a grid recomputes only missing cells — a partial SLURM-array failure costs one rerun, not the whole grid.
+Each cell's result is memoized on disk by [exca](https://github.com/facebookresearch/exca), keyed on (estimator config, task, fold, seed, **code version**). Re-running a grid recomputes only missing cells — a partial SLURM-array failure costs one rerun, not the whole grid. Disable per-run with `cache.enabled=false`.
 
 The code-version key comes from `utils/codever.py`: it fingerprints the AST-normalized source of your package at submit time (comments/formatting/docstring edits never invalidate; semantic edits do) and auto-bumps `0.0.N-<hash>`, appending a unified diff of what changed to `cache/benchmark/code_versions/CHANGELOG.md`:
 
@@ -88,7 +83,9 @@ The code-version key comes from `utils/codever.py`: it fingerprints the AST-norm
 +def train_step(model, batch, lr=1e-3, accumulate=2):
 ```
 
-Months later, any cached number traces to the exact code diff that produced it. Reverting code (e.g. `git checkout` of last month's commit) reproduces the old fingerprint and **resurrects the old cache** — no pinning needed. Annotate bumps with `CODEVER_NOTE="why"`; disable with `cache.enabled=false` or by skipping the extra (the harness falls back to uncached automatically).
+Months later, any cached number traces to the exact code diff that produced it. Reverting code (e.g. `git checkout` of last month's commit) reproduces the old fingerprint and **resurrects the old cache** — no pinning needed. Annotate bumps with `CODEVER_NOTE="why"`.
+
+Estimators are typed configs in `benchmark.py` — `estimator=mlp estimator.hidden_dim=64` swaps and overrides them with parse-time checking; add your own by defining a config class with a `build()` and registering it in `ESTIMATORS`.
 
 !!! warning "What the fingerprint does NOT see"
     Dependency upgrades, data files, and notebook code don't bump the version — documented out of scope. After a `torch`/`sklearn` upgrade, force-recompute critical cells once (`--infra.mode=force` semantics live on for exactly this).

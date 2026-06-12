@@ -1,6 +1,0 @@
-# trackio logger — local-first, wandb-compatible API, no account needed
-# Usage: python src/{{ package_name }}/train.py logger=trackio
-# Dashboard: uv run trackio show
-trackio:
-  _target_: {{ package_name }}.utils.trackio_logger.TrackioLogger
-  project: "{{ package_name }}"

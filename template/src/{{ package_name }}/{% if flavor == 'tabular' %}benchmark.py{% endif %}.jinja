@@ -5,43 +5,142 @@ point is the unit of work; the grid lives in scripts/run_benchmark.sh (local)
 and scripts/sbatch_benchmark.sh (SLURM array). Aggregate with
 scripts/aggregate_benchmark.py.
 
-With the optional caching extra (uv sync --extra caching), each cell's result
-is memoized on disk by exca, keyed on (estimator config, task, fold, seed,
-code version): re-running a grid recomputes only missing cells, and
+Cells are cached on disk by exca, keyed on (estimator config, task, fold,
+seed, code version): re-running a grid recomputes only missing cells, and
 utils/codever.py busts the cache automatically when package code changes
 (see cache/benchmark/code_versions/CHANGELOG.md for what changed when).
 
+Estimators are typed configs — add one by defining a config class with a
+build() and registering it in ESTIMATORS below.
+
 Usage:
-    python src/{{ package_name }}/benchmark.py                                # defaults
+    python src/{{ package_name }}/benchmark.py                                 # logreg on credit-g
     python src/{{ package_name }}/benchmark.py estimator=tabpfn task_id=3913 fold=2
+    python src/{{ package_name }}/benchmark.py estimator=mlp estimator.hidden_dim=64
 """
 
 import json
 import time
-from pathlib import Path
+from typing import Literal
 
-import hydra
+import exca
 import numpy as np
-from omegaconf import DictConfig, OmegaConf
+import pydantic
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, log_loss, roc_auc_score
 
 from {{ package_name }}.data.openml_data import load_openml_task
+from {{ package_name }}.utils import cli, codever
+from {{ package_name }}.utils.run_dir import create_run_dir
 from {{ package_name }}.utils.seed import set_seed
 
-try:  # optional cell caching: uv sync --extra caching
-    import exca
-    import pydantic
-
-    from {{ package_name }}.utils import codever
-except ImportError:
-    exca = None  # type: ignore[assignment]
+# --- estimators (swap via `estimator=<name>`; add yours here) ------------------
 
 
-def _evaluate(estimator_cfg: dict, task_id: int, fold: int, seed: int) -> dict:
+class EstimatorConfigBase(pydantic.BaseModel):
+    """An estimator config builds an sklearn-style estimator."""
+
+    def build(self):
+        raise NotImplementedError
+
+
+class LogregConfig(EstimatorConfigBase):
+    """Sanity-check baseline: if a foundation model doesn't beat this, stop."""
+
+    kind: Literal["logreg"] = "logreg"
+    max_iter: int = 1000
+
+    def build(self):
+        from sklearn.linear_model import LogisticRegression
+
+        return LogisticRegression(max_iter=self.max_iter)
+
+
+class TorchMLPConfig(EstimatorConfigBase):
+    """Your torch model behind the sklearn interface (see sklearn_wrapper.py)."""
+
+    kind: Literal["mlp"] = "mlp"
+    hidden_dim: int = 128
+    lr: float = 1e-3
+    max_epochs: int = 50
+    random_state: int | None = None  # derived from seed unless set
+
+    def build(self):
+        from {{ package_name }}.sklearn_wrapper import TorchMLPClassifier
+
+        return TorchMLPClassifier(
+            hidden_dim=self.hidden_dim,
+            lr=self.lr,
+            max_epochs=self.max_epochs,
+            random_state=self.random_state or 0,
+        )
+
+
+class TabPFNConfig(EstimatorConfigBase):
+    """TabPFN baseline. Needs: uv sync --extra tabular-baselines.
+
+    NOTE: TabPFN weights are licensed for non-commercial research use.
+    """
+
+    kind: Literal["tabpfn"] = "tabpfn"
+
+    def build(self):
+        from tabpfn import TabPFNClassifier
+
+        return TabPFNClassifier()
+
+
+class TabICLConfig(EstimatorConfigBase):
+    """TabICL baseline (fully open). Needs: uv sync --extra tabular-baselines."""
+
+    kind: Literal["tabicl"] = "tabicl"
+
+    def build(self):
+        from tabicl import TabICLClassifier
+
+        return TabICLClassifier()
+
+
+ESTIMATORS: dict[str, type[EstimatorConfigBase]] = {
+    "logreg": LogregConfig,
+    "mlp": TorchMLPConfig,
+    "tabpfn": TabPFNConfig,
+    "tabicl": TabICLConfig,
+}
+
+EstimatorUnion = LogregConfig | TorchMLPConfig | TabPFNConfig | TabICLConfig
+
+
+# --- config ---------------------------------------------------------------------
+
+
+class CacheConfig(pydantic.BaseModel):
+    enabled: bool = True
+    folder: str = "cache/benchmark"
+
+
+class BenchmarkConfig(pydantic.BaseModel):
+    seed: int = 42
+    task_id: int = 31  # OpenML task (31 = credit-g: small, fast). Browse: openml.org
+    fold: int = 0  # OpenML tasks ship standardized 10-fold CV splits
+    run_dir: str | None = None
+    estimator: EstimatorUnion = pydantic.Field(default_factory=LogregConfig, discriminator="kind")
+    cache: CacheConfig = CacheConfig()
+
+    def resolved(self) -> "BenchmarkConfig":
+        cfg = self.model_copy(deep=True)
+        if isinstance(cfg.estimator, TorchMLPConfig) and cfg.estimator.random_state is None:
+            cfg.estimator.random_state = cfg.seed
+        return cfg
+
+
+# --- the cell -------------------------------------------------------------------
+
+
+def _evaluate(estimator_spec: dict, task_id: int, fold: int, seed: int) -> dict:
     """Compute one (estimator, task, fold) cell — pure function of its arguments."""
     set_seed(seed, deterministic=False)
     split = load_openml_task(task_id, fold=fold)
-    estimator = hydra.utils.instantiate(estimator_cfg)
+    estimator = ESTIMATORS[estimator_spec["kind"]](**estimator_spec).build()
 
     t0 = time.perf_counter()
     estimator.fit(split.X_train, split.y_train)
@@ -82,53 +181,52 @@ def _evaluate(estimator_cfg: dict, task_id: int, fold: int, seed: int) -> dict:
     return metrics
 
 
-if exca is not None:
+class BenchmarkCell(pydantic.BaseModel):
+    """The exca-cached unit of work.
 
-    class BenchmarkCell(pydantic.BaseModel):
-        """One cached cell: exca memoizes compute() on disk, codever keys it to the code."""
+    The estimator goes in as its full dump (defaults included, with the
+    `kind` discriminator) so the cache uid is unambiguous across estimator
+    types — two different estimators can never share a uid.
+    """
 
-        estimator: dict
-        task_id: int
-        fold: int
-        seed: int
-        infra: exca.TaskInfra = exca.TaskInfra()
+    estimator: dict
+    task_id: int
+    fold: int
+    seed: int
+    infra: exca.TaskInfra = exca.TaskInfra()
 
-        @infra.apply
-        def compute(self) -> dict:
-            return _evaluate(self.estimator, self.task_id, self.fold, self.seed)
+    @infra.apply
+    def compute(self) -> dict:
+        return _evaluate(self.estimator, self.task_id, self.fold, self.seed)
 
 
-@hydra.main(version_base="1.3", config_path="../../configs", config_name="benchmark")
-def main(cfg: DictConfig) -> float:
+def main() -> float:
     """Run one (estimator, task, fold) cell and write metrics.json.
 
     Returns:
-        Test accuracy (for Hydra sweepers).
+        Test accuracy.
     """
-    output_dir = Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)  # type: ignore[attr-defined]
-    estimator_cfg = OmegaConf.to_container(cfg.estimator, resolve=True)
-    assert isinstance(estimator_cfg, dict)
+    cfg = cli.parse(
+        BenchmarkConfig,
+        groups={"estimator": ESTIMATORS},
+        description="One benchmark cell. Grid scripts: run_benchmark.sh / sbatch_benchmark.sh.",
+    ).resolved()
+    output_dir = create_run_dir(cfg, cfg.run_dir, root="outputs/benchmark")
 
-    use_cache = bool(cfg.cache.enabled)
-    if use_cache and exca is None:
-        print(
-            "benchmark: cache.enabled=true but exca is not installed "
-            "(uv sync --extra caching) — running uncached"
-        )
-        use_cache = False
+    estimator_spec = cfg.estimator.model_dump(mode="json")  # includes the kind discriminator
 
-    if use_cache:
+    if cfg.cache.enabled:
         cell = BenchmarkCell(
-            estimator=estimator_cfg,
+            estimator=estimator_spec,
             task_id=cfg.task_id,
             fold=cfg.fold,
             seed=cfg.seed,
-            infra=exca.TaskInfra(folder=str(cfg.cache.folder)),
+            infra=exca.TaskInfra(folder=cfg.cache.folder),
         )
         codever.stamp(cell.infra, packages=["{{ package_name }}"])
         metrics = cell.compute()
     else:
-        metrics = _evaluate(estimator_cfg, cfg.task_id, cfg.fold, cfg.seed)
+        metrics = _evaluate(estimator_spec, cfg.task_id, cfg.fold, cfg.seed)
 
     with open(output_dir / "metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)

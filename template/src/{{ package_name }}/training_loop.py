@@ -1,10 +1,10 @@
 """Explicit training loop primitives.
 
-train.py orchestrates setup and invokes these. Keep them free of Hydra config
-parsing — they accept plain args so they're testable without Hydra in the loop.
+train.py orchestrates setup and invokes these. Keep them free of config
+parsing — they accept plain args so they're testable in isolation.
 
 One objective, one loop — swap objectives (supervised / contrastive / masked /
-next-state) via Hydra without touching this file.
+next-state) via the config without touching this file.
 """
 
 from typing import Any

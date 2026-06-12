@@ -1,0 +1,25 @@
+"""Experiment presets — version-controlled, typed, reviewable (Rule 41).
+
+Each entry is a complete TrainConfig; select one with ``experiment=<name>``
+and override anything on top::
+
+    python src/{{ package_name }}/train.py experiment=example model.lr=3e-4
+
+Presets are plain Python, so building variants from each other is ordinary
+code: ``model_copy(update=...)``, helper functions, loops over widths — no
+YAML inheritance rules to memorize.
+"""
+
+from {{ package_name }}.configs import DataConfig, ModelConfig, TrainConfig, TrainerConfig
+
+EXPERIMENTS: dict[str, TrainConfig] = {
+    # `base` is what runs when no experiment= is given.
+    "base": TrainConfig(),
+{%- if include_example %}
+    "example": TrainConfig(
+        data=DataConfig(batch_size=128),
+        model=ModelConfig(hidden_dim=256, lr=1e-3, weight_decay=1e-4),
+        trainer=TrainerConfig(max_epochs=50),
+    ),
+{%- endif %}
+}

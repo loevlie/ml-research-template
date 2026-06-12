@@ -42,6 +42,6 @@ srun torchrun \
     --standalone \
     --nproc_per_node=${SLURM_GPUS_ON_NODE:-1} \
     src/{{ package_name }}/train.py \
-        hydra.run.dir="outputs/slurm_${SLURM_JOB_ID}" \
+        run_dir="outputs/slurm_${SLURM_JOB_ID}" \
         trainer.resume=auto \
         "$@"

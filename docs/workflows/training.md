@@ -3,36 +3,39 @@
 ## The moving parts
 
 ```
-configs/train.yaml        # composition root: which data/model/trainer/loss/logger to use
-src/<pkg>/train.py        # thin orchestrator: seed → fabric → data → model → loop
-src/<pkg>/training_loop.py# train_epoch() + validate() — plain functions, no Hydra inside
-src/<pkg>/objectives.py   # loss + forward bundled as a swappable callable
+src/<pkg>/configs.py       # typed config schema (pydantic) + GROUPS registry
+src/<pkg>/experiments.py   # named presets
+src/<pkg>/train.py         # thin orchestrator: parse → build → loop; exposes run(cfg)
+src/<pkg>/training_loop.py # train_epoch() + validate() — plain functions, no config inside
+src/<pkg>/objectives.py    # loss + forward bundled as a swappable callable
 ```
 
-`train.py` builds everything from config and calls the loop; the loop never parses config, so it's testable with plain arguments. Read those two files once — they're short by design.
+`train.py` builds everything from the config and calls the loop; the loop never parses config, so it's testable with plain arguments. Read those files once — they're short by design.
 
 ## Run things
 
 ```bash
-uv run python src/<pkg>/train.py                          # defaults
-uv run python src/<pkg>/train.py model.lr=1e-3 seed=123   # override anything
-uv run python src/<pkg>/train.py experiment=example       # named experiment
+uv run python src/<pkg>/train.py                          # base preset
+uv run python src/<pkg>/train.py model.lr=1e-3 seed=123   # override anything (typo-checked)
+uv run python src/<pkg>/train.py experiment=example       # named preset
 uv run python src/<pkg>/train.py trainer.precision=bf16-mixed trainer.max_epochs=200
+uv run python src/<pkg>/train.py --help                   # every flag + presets + variants
 ```
 
-Each run writes to `outputs/<date>/<time>/`: resolved config (`.hydra/`), `best.ckpt`, `last.ckpt`, `metrics.json` (consumed by the [multi-seed aggregator](multi-seed-stats.md)), and logger output.
+Each run writes to `outputs/<date>/<time>/` (pin with `run_dir=...`): `config.yaml` (resolved config + git state + argv), `best.ckpt`, `last.ckpt`, `metrics.json` (consumed by the [multi-seed aggregator](multi-seed-stats.md)), and logger output.
 
-## Experiments as files
+## Experiments as presets
 
-An experiment is a small YAML overriding the defaults — version-controlled, so every paper number traces to a commit:
+An experiment is a typed preset in `experiments.py` — version-controlled, so every paper number traces to a commit:
 
-```yaml title="configs/experiment/wider_net.yaml"
-# @package _global_
-model:
-  hidden_dim: 512
-  lr: 1e-3
-trainer:
-  max_epochs: 50
+```python title="src/<pkg>/experiments.py"
+EXPERIMENTS = {
+    "base": TrainConfig(),
+    "wider_net": TrainConfig(
+        model=ModelConfig(hidden_dim=512, lr=1e-3),
+        trainer=TrainerConfig(max_epochs=50),
+    ),
+}
 ```
 
 ```bash
@@ -55,29 +58,31 @@ class MaskedColumnObjective:
         return {"loss": loss}   # no logits/targets → val accuracy auto-skips
 ```
 
-```yaml title="configs/loss/masked_column.yaml"
-_target_: <pkg>.objectives.MaskedColumnObjective
-mask_ratio: 0.15
+```python title="src/<pkg>/configs.py"
+class MaskedLossConfig(pydantic.BaseModel):
+    mask_ratio: float = 0.15
+    def build(self):
+        return MaskedColumnObjective(mask_ratio=self.mask_ratio)
+
+GROUPS["loss"]["masked"] = MaskedLossConfig   # and add to the LossConfig union
 ```
 
 ```bash
-uv run python src/<pkg>/train.py loss=masked_column
+uv run python src/<pkg>/train.py loss=masked loss.mask_ratio=0.3
 ```
 
-A CLIP-style `ContrastiveObjective` ships in every project as a worked example (`loss=contrastive`).
+A CLIP-style `ContrastiveObjective` ships in every project as a worked example (`loss=contrastive` — needs a pair-yielding DataLoader and a two-tower model).
 
 ## Trainer knobs
 
-```yaml title="configs/trainer/default.yaml"
-precision: 32-true            # bf16-mixed for modern GPUs
+```python title="configs.py — TrainerConfig"
+precision: "32-true"            # bf16-mixed for modern GPUs
 max_epochs: 100
-patience: 10                  # early stopping
-accumulate_grad_batches: 1    # emulate larger batches
-gradient_clip_val: 1.0        # max grad norm per step; null disables
-resume: null                  # auto | /path/to/last.ckpt — see Checkpoints & resume
-scheduler:
-  name: none                  # cosine | constant — warmup + per-step stepping
-  warmup_steps: 0
+patience: 10                    # early stopping
+accumulate_grad_batches: 1      # emulate larger batches
+gradient_clip_val: 1.0          # max grad norm per step; None disables
+resume: None                    # "auto" | /path/to/last.ckpt — see Checkpoints & resume
+scheduler: name="none"          # cosine | constant — warmup + per-step stepping
 ```
 
 ## Evaluate a checkpoint

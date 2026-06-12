@@ -43,6 +43,6 @@ srun torchrun \
     --nproc_per_node=${SLURM_GPUS_ON_NODE:-1} \
     src/{{ package_name }}/train.py \
         seed=$SEED \
-        hydra.run.dir="${RESULTS_DIR}/seed_${SEED}" \
+        run_dir="${RESULTS_DIR}/seed_${SEED}" \
         trainer.resume=auto \
         "$@"

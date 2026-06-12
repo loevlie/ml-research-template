@@ -2,7 +2,7 @@
 
 # ml-research-template
 
-<p><i>A Copier template for ML research projects — PyTorch + Lightning Fabric + Hydra + uv,<br>with multi-seed significance testing and <code>copier update</code> baked in.</i></p>
+<p><i>A Copier template for ML research projects — PyTorch + Lightning Fabric + typed configs + uv,<br>with multi-seed significance testing and <code>copier update</code> baked in.</i></p>
 
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
@@ -41,9 +41,11 @@ Answer ~10 prompts, get a ready-to-train project: git initialized, deps locked, 
 
 - ⚡ **Statistical rigor on day one.** Multi-seed launchers (local + SLURM array) and an aggregator with bootstrap CIs, paired Wilcoxon/t-tests, and Cohen's d. Publication-ready out of the box.
 
-- ⚡ **Domain flavors.** `tabular` adds OpenML task loading, an sklearn-estimator wrapper, TabPFN/TabICL baselines, and an estimator × task × fold benchmark harness. `multimodal` adds timm/open_clip/HF-datasets plumbing and a CLIP-style contrastive objective.
+- ⚡ **Typed configs, familiar CLI.** pydantic schemas your IDE checks, parsed with the Hydra-style `experiment=x loss=contrastive model.lr=1e-3` syntax — typos die at parse time, not at epoch 40.
 
-- ⚡ **SLURM-native.** Hydra submitit launcher for sweeps, sbatch scripts for everything else — with preemption auto-resume (requeued jobs continue from `last.ckpt`).
+- ⚡ **Domain flavors.** `tabular` adds OpenML task loading, an sklearn-estimator wrapper, TabPFN/TabICL baselines, and a code-version-aware cached benchmark harness (exca). `multimodal` adds timm/open_clip/HF-datasets plumbing and a CLIP-style contrastive objective.
+
+- ⚡ **SLURM-native.** `sweep.py`/`tune.py` fan out as job arrays via submitit, sbatch scripts cover the rest — with preemption auto-resume (requeued jobs continue from `last.ckpt`).
 
 - ⚡ **Runtime shape checking** via `@jaxtyped(typechecker=beartype)` — broadcasting bugs die on the first forward pass, not after a day of training.
 
@@ -55,7 +57,7 @@ Answer ~10 prompts, get a ready-to-train project: git initialized, deps locked, 
 
 - You want a Lightning `Trainer` black box → use [lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template).
 - You work in JAX/TF → not for you.
-- You don't want to learn Hydra or Fabric → expect a learning curve.
+- You don't want to read ~150 lines of config/CLI plumbing you now own → expect a learning curve.
 
 ## Updating an existing project
 

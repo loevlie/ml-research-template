@@ -49,5 +49,5 @@ RESULTS_DIR="outputs/benchmark_${SLURM_ARRAY_JOB_ID}"
 
 srun python src/{{ package_name }}/benchmark.py \
     estimator="$EST" task_id="$TASK" fold="$FOLD" \
-    hydra.run.dir="${RESULTS_DIR}/${EST}/task_${TASK}/fold_${FOLD}" \
+    run_dir="${RESULTS_DIR}/${EST}/task_${TASK}/fold_${FOLD}" \
     "$@"

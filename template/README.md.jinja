@@ -31,10 +31,10 @@ uv sync --extra tracking-wandb     # W&B (cloud)
 uv sync --extra tracking-trackio   # trackio (local-first, wandb-compatible)
 
 # Optional: publication-ready statistics
-uv sync --extra stats            # pingouin
+uv sync --extra stats              # pingouin
 
-# Optional: SLURM submission (HPC clusters)
-uv sync --extra cluster          # hydra-submitit-launcher
+# Optional: SLURM submission (scripts/sweep.py, scripts/tune.py)
+uv sync --extra cluster            # submitit
 ```
 
 ## Quick Start
@@ -43,49 +43,41 @@ uv sync --extra cluster          # hydra-submitit-launcher
 # Train with defaults
 uv run python src/{{ package_name }}/train.py
 
-# Train with CLI overrides
+# Override anything — typed, typo-checked, free order
 uv run python src/{{ package_name }}/train.py model.lr=1e-3 data.batch_size=128
 
 {% if include_example -%}
-# Run a named experiment config
+# Run a named experiment preset (src/{{ package_name }}/experiments.py)
 uv run python src/{{ package_name }}/train.py experiment=example
 
 # Multi-seed run (5 seeds)
 bash scripts/run_seeds.sh experiment=example seeds="42,123,456,789,1337"
 
 # Aggregate and get significance tests
-python scripts/aggregate_seeds.py outputs/multi_seed_YYYYMMDD_HHMMSS
+uv run python scripts/aggregate_seeds.py outputs/multi_seed_YYYYMMDD_HHMMSS
 
 {% endif -%}
 # Evaluate a checkpoint
-uv run python src/{{ package_name }}/eval.py ckpt_path=/path/to/checkpoint.ckpt
+uv run python src/{{ package_name }}/eval.py ckpt_path=/path/to/best.ckpt
 
-# HP search with Optuna
-uv run python src/{{ package_name }}/train.py -m hparams_search=optuna
+# Cross-product sweep (local; add --cluster slurm for a SLURM array)
+uv run python scripts/sweep.py seed=42,123 model.lr=1e-4,1e-3
 
-# Switch logger via config ({{ logger }} is default)
-uv run python src/{{ package_name }}/train.py logger=wandb           # cloud — needs: uv sync --extra tracking-wandb
-uv run python src/{{ package_name }}/train.py logger=trackio         # local — needs: uv sync --extra tracking-trackio
-uv run python src/{{ package_name }}/train.py logger=tensorboard     # local
-uv run python src/{{ package_name }}/train.py logger=csv             # local, zero dependencies
+# HP search with Optuna (edit the space in scripts/tune.py)
+uv run python scripts/tune.py --n-trials 20
+
+# Switch tracker ({{ logger }} is the default)
+uv run python src/{{ package_name }}/train.py logger.kind=wandb         # cloud — needs: uv sync --extra tracking-wandb
+uv run python src/{{ package_name }}/train.py logger.kind=trackio       # local — needs: uv sync --extra tracking-trackio
+uv run python src/{{ package_name }}/train.py logger.kind=tensorboard   # local
+uv run python src/{{ package_name }}/train.py logger.kind=csv           # local, zero dependencies
 ```
 
 ## Project Structure
 
 ```
 .
-├── configs/                     # Hydra configs (composable YAML)
-│   ├── data/                    #   Dataset & dataloader configs
-{% if include_example -%}
-│   ├── experiment/              #   Version-controlled experiment configs
-{% endif -%}
-│   ├── hparams_search/          #   HP search configs (Optuna)
-│   ├── logger/                  #   Experiment tracker configs
-│   ├── model/                   #   Model architecture configs
-│   ├── trainer/                 #   Fabric settings (accelerator, precision, epochs)
-│   ├── local/                   #   Machine-specific overrides (gitignored)
-│   ├── train.yaml               #   Main training config
-│   └── eval.yaml                #   Evaluation config
+├── configs/local.yaml           # Machine-local overrides (gitignored)
 ├── data/
 │   ├── raw/                     #   Immutable original data
 │   └── processed/               #   Transformed, model-ready data
@@ -97,68 +89,65 @@ uv run python src/{{ package_name }}/train.py logger=csv             # local, ze
 ├── notebooks/                   #   Exploration notebooks (not training)
 ├── scripts/
 │   ├── run_seeds.sh             #   Multi-seed experiment launcher
-│   └── aggregate_seeds.py       #   Aggregate results + significance tests
+│   ├── aggregate_seeds.py       #   Aggregate results + significance tests
+│   ├── sweep.py                 #   Cross-product sweeps (local or SLURM array)
+│   └── tune.py                  #   Optuna HP search (local or SLURM workers)
 ├── src/{{ package_name }}/
+│   ├── configs.py               #   Typed config schema (pydantic) + GROUPS
+│   ├── experiments.py           #   Named experiment presets
 │   ├── data/datamodule.py       #   Dataset + DataLoader factory
 │   ├── models/module.py         #   nn.Module with jaxtyping shapes
-│   ├── utils/seed.py            #   Reproducibility (seed all RNGs)
-│   ├── utils/stats.py           #   Significance tests & reporting
-│   ├── train.py                 #   Training entry point (Hydra)
-│   └── eval.py                  #   Evaluation entry point (Hydra)
+│   ├── objectives.py            #   Pluggable loss + forward (Objective protocol)
+│   ├── training_loop.py         #   Explicit loop primitives
+│   ├── utils/cli.py             #   Hydra-style CLI on tyro (key=value, groups, presets)
+│   ├── utils/run_dir.py         #   Timestamped run dirs + config snapshots
+│   ├── utils/{seed,stats}.py    #   Reproducibility + significance tests
+│   ├── train.py                 #   Training entry point
+│   └── eval.py                  #   Evaluation entry point
 ├── tests/                       #   Smoke tests
 └── pyproject.toml               #   Dependencies, ruff, mypy, pytest config
 ```
 
-## Swapping losses / Self-supervised
+## Configuration
 
-Loss + forward pass are factored into a single `Objective` (see `src/{{ package_name }}/objectives.py`). The training loop in `training_loop.py` never references a specific loss — it just calls `objective(model, batch)` and uses the returned `"loss"`. Swap objectives via Hydra:
+Configs are typed pydantic models in `src/{{ package_name }}/configs.py`; presets live in `experiments.py`; machine-local overrides in `configs/local.yaml` (gitignored). The CLI keeps Hydra-style ergonomics on a typed core:
 
 ```bash
-# Default: supervised cross-entropy
-uv run python src/{{ package_name }}/train.py
-
-# Different loss (after adding your objective + config):
-uv run python src/{{ package_name }}/train.py loss=contrastive
-uv run python src/{{ package_name }}/train.py loss=masked_column
+uv run python src/{{ package_name }}/train.py experiment=example loss=contrastive loss.temperature=0.1 model.lr=1e-3
 ```
 
-To add a new objective:
+- `experiment=<name>` selects a preset, `loss=<variant>` swaps a typed config block (see `GROUPS`), `a.b=v` overrides any field — free order, parse-time typo checking.
+- Derived values (e.g. `model.n_features` from `data.n_features`) resolve in `TrainConfig.resolved()`; `${a.b}` references work inside `configs/local.yaml`.
+- Every run writes its resolved config + git state + argv to `<run_dir>/config.yaml`.
 
-1. **Define the class** in `src/{{ package_name }}/objectives.py`:
+## Swapping losses / Self-supervised
+
+Loss + forward pass are factored into a single `Objective` (see `src/{{ package_name }}/objectives.py`). The training loop never references a specific loss — it calls `objective(model, batch)` and uses the returned `"loss"`. To add one:
+
+1. **Define the class** in `objectives.py` with `__call__(model, batch) -> dict`.
+2. **Add a config class** with a `build()` in `configs.py` and register it:
 
     ```python
-    class ContrastiveObjective:
-        def __init__(self, temperature: float = 0.1) -> None:
-            self.tau = temperature
+    class MaskedLossConfig(pydantic.BaseModel):
+        mask_ratio: float = 0.15
+        def build(self):
+            return MaskedColumnObjective(mask_ratio=self.mask_ratio)
 
-        def __call__(self, model, batch):
-            x1, x2 = batch                        # pair-yielding DataLoader
-            z1, z2 = model(x1), model(x2)
-            loss = info_nce(z1, z2, tau=self.tau)
-            return {"loss": loss}                 # omit logits/targets — val loop skips acc
+    GROUPS["loss"]["masked"] = MaskedLossConfig   # + add to the LossConfig union
     ```
 
-2. **Add a Hydra config** at `configs/loss/contrastive.yaml`:
+3. Run it: `uv run python src/{{ package_name }}/train.py loss=masked loss.mask_ratio=0.3`
 
-    ```yaml
-    _target_: {{ package_name }}.objectives.ContrastiveObjective
-    temperature: 0.1
-    ```
-
-3. **If the batch shape changed** (e.g., pairs instead of `(x, y)`), either add a new `configs/data/<name>.yaml` that points to a matching DataLoader, or extend `datamodule.py` to yield the right structure.
-
-The same pattern covers masked-column prediction (BERT-for-tables), next-state (world models), multi-task (return a weighted sum), and any SSL variant. The training loop doesn't need to know.
-
-Per-sample augmentations go in `src/{{ package_name }}/data/augmentations.py`; batch-level augs (e.g., MixUp) belong in a custom `collate_fn` or inside the objective.
+The same pattern covers masked-column prediction (BERT-for-tables), next-state (world models), multi-task, and any SSL variant. Per-sample augmentations go in `src/{{ package_name }}/data/augmentations.py`; batch-level augs (e.g., MixUp) belong in a custom `collate_fn` or inside the objective.
 
 {% if flavor == "tabular" -%}
 ## Tabular benchmarking
 
-Tabular-FM evaluation is many small (estimator × OpenML task × fold) cells, not one big run:
+Tabular-FM evaluation is many small (estimator × OpenML task × fold) cells, not one big run — and cells are cached on disk (exca), keyed to the estimator config **and the code version**:
 
 ```bash
-# One cell
-uv run python src/{{ package_name }}/benchmark.py estimator=mlp task_id=31 fold=0
+# One cell (typed estimator configs — see ESTIMATORS in benchmark.py)
+uv run python src/{{ package_name }}/benchmark.py estimator=mlp estimator.hidden_dim=64 task_id=31 fold=0
 
 # Full grid — locally, or as a SLURM array (edit the grid in the script)
 bash scripts/run_benchmark.sh
@@ -170,12 +159,9 @@ uv run python scripts/aggregate_benchmark.py outputs/benchmark_<stamp> --baselin
 # Foundation-model baselines (TabPFN weights: non-commercial research only)
 uv sync --extra tabular-baselines
 uv run python src/{{ package_name }}/benchmark.py estimator=tabpfn
-
-# Optional: cache cells on disk (exca), keyed to estimator config AND code version.
-# Re-running a grid recomputes only missing cells; semantic code edits auto-bump
-# the cache version with a diff changelog (utils/codever.py).
-uv sync --extra caching
 ```
+
+Re-running a grid recomputes only missing or code-changed cells; `utils/codever.py` auto-bumps the cache version on semantic code edits and writes a diff changelog to `cache/benchmark/code_versions/CHANGELOG.md`.
 
 Ship your own models behind the sklearn interface (`src/{{ package_name }}/sklearn_wrapper.py`) — that's how TabPFN/TabICL get adopted, and it makes them drop-ins for this harness and everyone else's.
 
@@ -194,56 +180,25 @@ Data-loading escalation path: HF `datasets` → LitData / MosaicML streaming (cl
 {% endif -%}
 ## Running on SLURM
 
-This template ships two complementary SLURM paths. Pick whichever fits.
-
-### 1. Hydra multirun (composes with sweeps)
-
 ```bash
-# One-time: install the cluster extra
-uv sync --extra cluster
+# Sweeps / HP search as SLURM jobs (needs: uv sync --extra cluster)
+uv run python scripts/sweep.py --cluster slurm --partition gpu seed=42,43,44 model.lr=1e-4,1e-3
+uv run python scripts/tune.py --cluster slurm --partition gpu --workers 8 --n-trials 64
 
-# Fill in your partition + account in configs/launcher/slurm.yaml first.
-# Then fan out a seed sweep across SLURM:
-python src/{{ package_name }}/train.py -m launcher=slurm seed=42,43,44,45,46
-
-# Dry-run on a debug partition before committing to 24h jobs:
-python src/{{ package_name }}/train.py -m launcher=slurm_debug trainer.max_epochs=2
-
-# Compose with Optuna HP search:
-python src/{{ package_name }}/train.py -m hparams_search=optuna launcher=slurm
-```
-
-Each Hydra config override becomes one SLURM job. Logs land in `multirun/<timestamp>/`.
-
-### 2. Raw sbatch scripts (simpler, no Hydra submitit dep)
-
-```bash
-# Single GPU / multi-GPU on one node:
+# Plain sbatch scripts (single job / seed array)
 sbatch scripts/sbatch_train.sh experiment=example
-
-# Multi-seed as a SLURM array job (one submission, N parallel runs):
 sbatch scripts/sbatch_seeds.sh experiment=example
 ```
 
-Both scripts assume `.venv/` exists on a shared filesystem. Create it on the login node with `uv sync --extra dev --extra cluster`.
-
-### Preemption survival
-
-The sbatch scripts use `--signal=B:USR1@90` — SIGUSR1 90s before walltime. Wire Lightning's `SLURMEnvironment(auto_requeue=True)` into your `Fabric(...)` call and your job checkpoints and requeues itself automatically.
-
-### Notes
-
-- **Partition & account:** edit `configs/launcher/slurm.yaml` or pass `hydra.launcher.partition=gpu hydra.launcher.account=xyz` on the CLI. Use `configs/local/` (gitignored) to keep machine-specific values out of git.
-- **Optuna across jobs:** set `hydra.sweeper.storage: sqlite:///$PWD/optuna.db` on a shared filesystem so trials coordinate across nodes. Without shared storage, an N-trial sweep runs as N independent random searches.
-- **Multi-node DDP:** outside the scope of these scripts. Use the `scontrol show hostnames` + `torchrun --rdzv-backend=c10d` pattern from the [PyTorch examples repo](https://github.com/pytorch/examples/tree/main/distributed/ddp-tutorial-series/slurm).
-- **Container runtimes:** if your cluster has Pyxis/Enroot, add `--container-image=...` to `hydra.launcher.additional_parameters` in `slurm.yaml`.
+The sbatch scripts assume `.venv/` exists on a shared filesystem (`uv sync --extra dev --extra cluster` on the login node). All paths pin `run_dir` to the job ID and pass `trainer.resume=auto`, so preempted + requeued jobs continue from `last.ckpt` automatically.
 
 ## Tools
 
 | Tool | Purpose |
 |------|---------|
 | [Lightning Fabric](https://lightning.ai/docs/fabric/) | Multi-GPU, mixed precision — no hidden training loop |
-| [Hydra](https://hydra.cc/) | Config management + CLI overrides |
+| [pydantic](https://docs.pydantic.dev/) + [tyro](https://brentyi.github.io/tyro/) | Typed configs with Hydra-style CLI (utils/cli.py) |
+| [submitit](https://github.com/facebookincubator/submitit) + [Optuna](https://optuna.org/) | SLURM sweeps + HP search |
 | [W&B](https://wandb.ai/) / [trackio](https://github.com/gradio-app/trackio) / [TensorBoard](https://www.tensorflow.org/tensorboard) | Experiment tracking (switchable) |
 | [jaxtyping](https://github.com/patrick-kidger/jaxtyping) + [beartype](https://github.com/beartype/beartype) | Runtime shape checking |
 | [Ruff](https://github.com/astral-sh/ruff) | Linting + formatting |
