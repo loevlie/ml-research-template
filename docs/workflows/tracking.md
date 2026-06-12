@@ -1,6 +1,15 @@
 # Experiment tracking
 
-Trackers are swappable Fabric loggers — pick a default at template time, switch any run with `logger.kind=<name>`:
+Trackers sit behind one config key — pick a default at template time, switch any run with `logger.kind=<name>`:
+
+```mermaid
+flowchart LR
+    L["training loop<br><i>log(name, value, step)</i>"] --> K{"logger.kind"}
+    K -->|wandb| W["cloud · dashboards · sharing"]
+    K -->|trackio| T["local-first · no account"]
+    K -->|tensorboard| B["local · universal"]
+    K -->|csv| C["flat files · zero deps"]
+```
 
 ```bash
 uv run python src/<pkg>/train.py logger.kind=wandb        # cloud, collaboration

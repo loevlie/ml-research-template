@@ -52,9 +52,16 @@ The flavors build on PyTorch libraries. Choosing `framework=jax` gives you the g
 
 ## First training run
 
-```bash
-cd my-project
-uv run python src/<package_name>/train.py
+<!-- termynal -->
+
+```
+$ cd my-project
+$ uv run python src/<package_name>/train.py
+run dir   outputs/2026-06-12/10-53-13
+model     ExampleModel | 22,026 params | lr=0.0003
+---> 100%
+Epoch   0 | train_loss=2.3055 | val_loss=2.2940 | val_acc=0.0850
+best      val_loss=2.2930 | ckpts outputs/.../best.ckpt
 ```
 
 That trains the reference MLP on synthetic data — proof the whole pipeline works before you touch anything. Then:

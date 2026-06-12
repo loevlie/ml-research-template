@@ -1,39 +1,59 @@
-# Run on SLURM
+# SLURM, checkpoints & resume
 
-Two complementary paths ship with every project: Python launchers (submitit) for sweeps and HP search, and plain sbatch scripts for everything else.
+Two complementary paths ship with every project: Python launchers (submitit)
+for sweeps and HP search, and plain sbatch scripts for everything else. Both
+survive preemption without babysitting.
 
-## Path 1 — submitit launchers (sweeps & tuning)
+## Path 1 — submitit launchers
 
-```bash
-uv sync --extra cluster        # one-time: submitit
-
-# a cross-product sweep as one SLURM job array
-uv run python scripts/sweep.py --cluster slurm --partition gpu seed=42,43,44 model.lr=1e-4,1e-3
-
-# 8 parallel Optuna workers sharing one study
-uv run python scripts/tune.py --cluster slurm --partition gpu --workers 8 --n-trials 64
-```
-
-Pass `--account`, `--gpus-per-node`, `--mem-gb`, `--timeout-min` as needed — see `--help`. Details in [Sweeps & HP search](sweeps.md).
+`scripts/sweep.py` and `scripts/tune.py` take `--cluster slurm` and become
+job arrays — commands and details in [Sweeps & HP search](sweeps.md).
 
 ## Path 2 — sbatch scripts (no extra deps, fully inspectable)
 
 ```bash
-sbatch scripts/sbatch_train.sh experiment=example     # single job, single/multi-GPU via torchrun
+sbatch scripts/sbatch_train.sh experiment=example     # single job, single/multi-GPU
 sbatch scripts/sbatch_seeds.sh experiment=example     # array job: one seed per task
 ```
 
 Both assume `.venv/` exists on a shared filesystem (`uv sync --extra dev --extra cluster` on the login node). Extra args are forwarded to `train.py` in the same `key=value` syntax.
 
-## Preemption survival — built in
+## What gets saved
 
-Both paths pin each run's directory and pass `trainer.resume=auto`:
+Every epoch, the loop writes two checkpoints to the run directory:
+
+| File | When | Contents |
+|---|---|---|
+| `best.ckpt` | val loss improved | model, optimizer, scheduler, epoch, best metrics, patience |
+| `last.ckpt` | every epoch | same — the resume point |
+
+## Resuming
 
 ```bash
-run_dir="outputs/slurm_${SLURM_JOB_ID}" trainer.resume=auto
+# pick up last.ckpt from this run dir if present (no-op otherwise)
+uv run python src/<pkg>/train.py run_dir=outputs/myrun trainer.resume=auto
+
+# resume from an explicit checkpoint
+uv run python src/<pkg>/train.py trainer.resume=outputs/<run>/last.ckpt
 ```
 
-`--requeue` means a preempted job is resubmitted **with the same job ID** → it lands in the same directory → `resume=auto` picks up `last.ckpt` (saved every epoch) and continues from the last finished epoch. No babysitting. Details in [Checkpoints & resume](resume-checkpointing.md).
+```text
+Resumed from outputs/myrun/last.ckpt (epoch 1)
+Epoch   2 | train_loss=2.2795 | val_loss=2.2927 | val_acc=0.0900
+```
+
+Resume restores the epoch counter, best-metric tracking, early-stopping
+patience, optimizer moments, and scheduler position — training continues as
+if never interrupted (modulo dataloader order within the epoch).
+
+!!! warning "Keep the trainer config consistent"
+    A checkpoint saved with `scheduler.name=cosine` must be resumed with the
+    same scheduler (and vice versa) — state-dict keys are matched strictly.
+
+## Preemption survival — built in
+
+The sbatch scripts pin each run's directory to the job ID and pass
+`trainer.resume=auto`, so a preempted job heals itself:
 
 ```mermaid
 flowchart LR
@@ -41,6 +61,10 @@ flowchart LR
     B --> C["outputs/slurm_12345/<br>same run dir"]
     C -->|"resume=auto finds last.ckpt"| D["continues at<br>epoch 18"]
 ```
+
+Granularity is one epoch; if your epochs are hours long, also wire
+Lightning's `SLURMEnvironment(auto_requeue=True)` for the SIGUSR1-based
+mid-epoch save (the scripts already send `--signal=B:USR1@90`).
 
 ## Tabular flavor: array benchmarks
 
@@ -51,3 +75,4 @@ Tabular-FM evaluation is hundreds of small CPU jobs, not one big GPU run. `scrip
 - **Logger on air-gapped compute nodes:** `WANDB_MODE=offline` + `wandb sync` from the login node, or `logger.kind=trackio` / `logger.kind=csv` — see [Tracking](tracking.md).
 - **Multi-node DDP:** out of scope for these scripts; use the `scontrol show hostnames` + `torchrun --rdzv-backend=c10d` pattern from the [PyTorch examples](https://github.com/pytorch/examples/tree/main/distributed/ddp-tutorial-series/slurm).
 - **Containers:** with Pyxis/Enroot, add the container flags to the sbatch scripts directly — they're plain bash.
+- **Evaluating a checkpoint:** `eval.py ckpt_path=...` loads just the model weights from any checkpoint, regardless of the extra training state inside.

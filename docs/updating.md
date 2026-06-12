@@ -7,7 +7,15 @@ cd path/to/existing-project
 copier update --trust
 ```
 
-Copier reads `.copier-answers.yml` (your original answers + template version), computes a three-way merge between the old template, the new template, and your project, and applies it.
+Copier reads `.copier-answers.yml` (your original answers + template version), computes a three-way merge between the old template, the new template, and your project, and applies it:
+
+```mermaid
+flowchart LR
+    A["template @ v1<br><i>what you generated from</i>"] --> M{"three-way<br>merge"}
+    B["template @ v2<br><i>what improved since</i>"] --> M
+    P["your project<br><i>your edits</i>"] --> M
+    M --> U["updated project<br><i>your files untouched,<br>conflicts marked</i>"]
+```
 
 ## What's protected
 

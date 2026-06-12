@@ -97,8 +97,7 @@ nav:
       - Train & experiment: workflows/training.md
       - Typed configs & overrides: workflows/configs.md
       - Sweeps & HP search: workflows/sweeps.md
-      - Run on SLURM: workflows/slurm.md
-      - Checkpoints & resume: workflows/resume-checkpointing.md
+      - SLURM, checkpoints & resume: workflows/slurm.md
       - Multi-seed statistics: workflows/multi-seed-stats.md
       - Statistics, explained: workflows/stats-explained.md
       - Experiment tracking: workflows/tracking.md

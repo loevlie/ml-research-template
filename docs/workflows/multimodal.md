@@ -26,7 +26,17 @@ Start simple; move down only when it hurts:
 
 ## Contrastive training
 
-`ContrastiveObjective` (in every project's `objectives.py`) is symmetric InfoNCE — CLIP-style. It expects pairs and a two-tower model:
+`ContrastiveObjective` (in every project's `objectives.py`) is symmetric InfoNCE — CLIP-style:
+
+```mermaid
+flowchart LR
+    I["images x_a"] --> TI["image tower"] --> ZA["z_a&nbsp;[B,D]"]
+    T["texts x_b"] --> TT["text tower"] --> ZB["z_b&nbsp;[B,D]"]
+    ZA --> N["InfoNCE: row i of x_a<br>matches row i of x_b"]
+    ZB --> N
+```
+
+It expects pairs and a two-tower model:
 
 ```python
 class TwoTower(nn.Module):

@@ -1,5 +1,12 @@
 # Sweeps & HP search
 
+```mermaid
+flowchart LR
+    A["seed=42,123,456<br>model.lr=1e-4,1e-3"] -->|"cross product"| R["6 runs<br><i>run_000 … run_005</i>"]
+    R -->|"default"| L["local, sequential"]
+    R -->|"--cluster slurm"| J["one SLURM job array<br><i>requeue + resume built in</i>"]
+```
+
 ## Grid sweeps: `scripts/sweep.py`
 
 Comma-separated values fan out as a cross product (the `-m` multirun replacement):

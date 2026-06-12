@@ -7,12 +7,20 @@ copier copy --trust -d framework=jax gh:loevlie/ml-research-template my-project
 ```
 
 You get flax NNX for the model, optax for the optimizer, and the same
-everything-else: the typed configs, the `key=value` CLI, presets,
-`configs/local.yaml`, sweeps, Optuna, the SLURM scripts, multi-seed stats,
-and run-directory provenance are shared code — every command in the
-[cheatsheet](../cheatsheet.md) works unchanged. JAX pairs with the generic
-flavor; the tabular and multimodal flavors build on PyTorch libraries
-(TabPFN, timm, open_clip) and stay PyTorch.
+everything-else — every command in the [cheatsheet](../cheatsheet.md) works
+unchanged, because only the training core swaps:
+
+```mermaid
+flowchart TB
+    subgraph shared ["shared, framework-free"]
+        S["configs · CLI · presets · local.yaml<br>sweep · tune · seeds · stats · run dirs · SLURM"]
+    end
+    shared --> PT["<b>pytorch core</b><br>Fabric loop · torch model<br>utils/schedulers.py"]
+    shared --> JX["<b>jax core</b><br>jitted steps · NNX model<br>optax owns the schedule"]
+```
+
+JAX pairs with the generic flavor; the tabular and multimodal flavors build
+on PyTorch libraries (TabPFN, timm, open_clip) and stay PyTorch.
 
 ## What's different, and why it's nice
 
