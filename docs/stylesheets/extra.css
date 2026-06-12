@@ -131,6 +131,105 @@
   box-shadow: var(--md-shadow-z2);
 }
 
+/* ---- Interactive widgets --------------------------------------------------- */
+
+.ix-card {
+  margin: 1rem 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-left: 0.2rem solid var(--md-accent-fg-color);
+  border-radius: 0.4rem;
+  background: var(--md-code-bg-color);
+  font-size: 0.72rem;
+}
+
+.ix-head {
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+}
+
+.ix-card .md-button {
+  padding: 0.2em 0.9em;
+  font-size: 0.68rem;
+  margin-right: 0.4rem;
+}
+
+.ix-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.ix-lbl {
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+.ix-count, .ix-pick, .ix-ci, .ix-row, .ix-note {
+  font-family: var(--md-code-font-family);
+  margin: 0.25rem 0;
+}
+
+.ix-note { opacity: 0.7; min-height: 1.2em; }
+
+.ix-card canvas {
+  width: 100%;
+  max-width: 640px;
+  display: block;
+  margin: 0.4rem 0;
+}
+
+.ix-slider input[type="range"] {
+  width: 12rem;
+  vertical-align: middle;
+  accent-color: var(--md-accent-fg-color);
+}
+
+.ix-verdict.good { color: #2e7d32; font-weight: 600; }
+.ix-verdict.bad { color: #c62828; font-weight: 600; }
+
+[data-md-color-scheme="slate"] .ix-verdict.good { color: #81c784; }
+[data-md-color-scheme="slate"] .ix-verdict.bad { color: #ef9a9a; }
+
+.ix-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.ix-grid select, .ix-grid input {
+  font: inherit;
+  padding: 0.1rem 0.3rem;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 0.2rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+}
+
+.ix-cmd, .ix-files {
+  background: var(--md-default-bg-color);
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.3rem;
+  overflow-x: auto;
+}
+
+.tok-base { opacity: 0.65; }
+.tok-preset { color: #8e24aa; font-weight: 600; }
+.tok-group { color: #00897b; font-weight: 600; }
+.tok-key { color: #e65100; font-weight: 600; }
+
+[data-md-color-scheme="slate"] .tok-preset { color: #ce93d8; }
+[data-md-color-scheme="slate"] .tok-group { color: #80cbc4; }
+[data-md-color-scheme="slate"] .tok-key { color: #ffb74d; }
+
+.ix-new {
+  background: rgba(108, 99, 255, 0.18);
+  border-radius: 2px;
+}
+
 /* ---- Mermaid diagrams ---------------------------------------------------- */
 
 .md-typeset .mermaid {

@@ -50,6 +50,8 @@ copier copy --trust gh:loevlie/ml-research-template my-project
 
 The flavors build on PyTorch libraries. Choosing `framework=jax` gives you the generic project with a flax NNX + optax training core instead — same configs, same commands ([what changes](workflows/jax.md)).
 
+<div class="ix-card" id="ix-tree"></div>
+
 ## First training run
 
 <!-- termynal -->

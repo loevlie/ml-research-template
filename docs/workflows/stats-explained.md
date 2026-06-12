@@ -36,6 +36,8 @@ built this way would contain the true mean. **Caveat:** it's a CI for the
 *mean*, not a range for individual runs — and with very few seeds it gets
 optimistically narrow, which is one reason 5 is the floor, not the goal.
 
+<div class="ix-card" id="ix-bootstrap"></div>
+
 ## Paired tests — and why the same seeds
 
 The question a significance test answers: *could a delta this size happen
@@ -52,6 +54,8 @@ significance at 0.05 is *mathematically unreachable*. That's why the
 aggregator falls back to a **paired t-test** below 6 seeds (stronger
 assumptions, but it can at least speak). Our `p=0.0079` is the 8-seed
 minimum: the delta favored "ours" on all 8.
+
+<div class="ix-card" id="ix-seeds"></div>
 
 ## Cohen's d
 

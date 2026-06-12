@@ -37,6 +37,8 @@ flowchart LR
 3. **Group swap** — `loss=contrastive` replaces a whole typed config block. Variants are registered in `GROUPS` in `configs.py`.
 4. **Key override** — `model.lr=1e-3 trainer.max_epochs=50`, any nesting depth, free order.
 
+<div class="ix-card" id="ix-builder"></div>
+
 ## Experiments are Python now
 
 ```python title="src/<pkg>/experiments.py"

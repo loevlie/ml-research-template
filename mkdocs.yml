@@ -52,6 +52,9 @@ theme:
 extra_css:
   - stylesheets/extra.css
 
+extra_javascript:
+  - javascripts/interactive.js
+
 plugins:
   - search
   - termynal
