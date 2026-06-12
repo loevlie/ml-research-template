@@ -1,0 +1,484 @@
+"""codever — code-change-aware auto-versioning for exca caches.
+
+exca caches results keyed on (config, infra.version) and is blind to code
+edits: change the training loop, and yesterday's result comes back for
+today's code. codever closes that hole at submit time:
+
+    cfg = tyro.cli(TrainCfg)
+    codever.stamp(cfg.infra, packages=["mypkg"], extra_watch=["configs/**/*.yaml"])
+    cfg.run()
+
+stamp() fingerprints the AST-normalized source of the watched code (comments,
+formatting, and docstrings never bump; semantic edits do), then sets
+
+    infra.version = "0.0.<N>-<fp8>"
+
+where the 8-hex fingerprint suffix is the *authoritative* cache key and the
+counter is cosmetic, human-friendly ordering. Losing or corrupting the
+registry can therefore only cause a recompute (false bump) — never a stale
+hit. Each new version appends a unified diff of what actually changed to
+CHANGELOG.md next to the cache.
+
+Overrides:
+    --infra.version=0.0.16-a1b2c3d4   pin: stamp() steps aside (drift warning)
+    CODEVER_OFF=1                     bypass entirely
+    CODEVER_NOTE="why"                annotate the bump in the changelog
+
+For long queue waits, call codever.verify(infra, packages=...) at the top of
+the cached method: it re-fingerprints inside the job and refuses to run under
+a version minted for different code (the edit-after-submit window).
+
+Out of scope (documented, not detected): dependency upgrades, data files not
+listed in extra_watch, notebooks, monkeypatching. Python interpreter changes
+are recorded and may cause one spurious global bump per upgrade
+(ast.unparse output can shift between minor versions).
+"""
+
+import ast
+import difflib
+import hashlib
+import importlib.util
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+from pathlib import Path
+
+DEFAULT_VERSIONS = ("0", "auto")  # stamp() only acts when infra.version is one of these
+_FP_LEN = 8
+_SNAP_LEN = 12
+_VERSION_RE = re.compile(r"0\.0\.\d+-[0-9a-f]{8}")
+_own_stamps: dict[int, tuple[str, str]] = {}  # id(infra) -> (version, fp)
+
+
+# --------------------------------------------------------------------------- hashing
+
+
+def _normalize(source: str) -> str:
+    """Canonicalize Python source: drop comments, formatting, and docstrings."""
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            body = node.body
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                del body[0]
+    return ast.unparse(tree)
+
+
+def _hash_bytes(rel: str, data: bytes) -> str:
+    """Normalized hash for parseable .py files; raw-bytes hash otherwise (sound fallback)."""
+    if rel.endswith(".py"):
+        try:
+            return hashlib.sha256(_normalize(data.decode()).encode()).hexdigest()
+        except (SyntaxError, UnicodeDecodeError, ValueError):
+            pass
+    return hashlib.sha256(data).hexdigest()
+
+
+def _package_roots(name: str) -> list[Path]:
+    spec = importlib.util.find_spec(name)
+    if spec is None or not spec.submodule_search_locations:
+        raise ModuleNotFoundError(f"codever: cannot locate package {name!r}")
+    # Namespace packages may span several sys.path entries; watch all of them.
+    return [Path(p) for p in spec.submodule_search_locations]
+
+
+def _collect_bytes(packages, extra_watch) -> dict[str, bytes]:
+    """Read every watched file exactly once: {manifest_key: raw bytes}.
+
+    Single-pass by design — fingerprint, snapshot, and changelog all derive
+    from these captured bytes, so a file edited or deleted mid-stamp cannot
+    desynchronize them.
+    """
+    contents: dict[str, bytes] = {}
+
+    def add(key: str, path: Path) -> None:
+        if not path.is_file():  # skips dangling symlinks, dirs named *.py
+            return
+        if key in contents:
+            return  # first hit wins, matching import shadowing semantics
+        try:
+            contents[key] = path.read_bytes()
+        except OSError as e:
+            print(f"codever: skipping unreadable {path} ({e})", file=sys.stderr)
+
+    for name in packages:
+        for root in _package_roots(name):
+            seen_dirs: set[Path] = set()
+            # os.walk(followlinks=True): the import system follows dir symlinks,
+            # so the fingerprint must too; seen_dirs guards against cycles.
+            for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
+                resolved = Path(dirpath).resolve()
+                if resolved in seen_dirs:
+                    dirnames[:] = []
+                    continue
+                seen_dirs.add(resolved)
+                dirnames[:] = sorted(d for d in dirnames if d != "__pycache__")
+                for fname in sorted(filenames):
+                    if fname.endswith(".py"):
+                        p = Path(dirpath) / fname
+                        add(f"{name}/{p.relative_to(root).as_posix()}", p)
+
+    cwd = Path.cwd().resolve()
+    for pattern in extra_watch:
+        matches = [p for p in sorted(cwd.glob(pattern)) if p.is_file()]
+        if not matches:
+            print(
+                f"codever: extra_watch pattern {pattern!r} matched no files under {cwd} — "
+                "edits there will NOT bump the version",
+                file=sys.stderr,
+            )
+        for p in matches:
+            resolved = p.resolve()
+            if not resolved.is_relative_to(cwd):
+                raise ValueError(f"codever: extra_watch path escapes cwd: {p}")
+            # "extra/" namespace keeps these keys from colliding with package keys
+            add(f"extra/{resolved.relative_to(cwd).as_posix()}", resolved)
+
+    if not contents:
+        raise ValueError("codever: nothing to fingerprint (empty packages/extra_watch)")
+    return contents
+
+
+def fingerprint(packages=(), extra_watch=()) -> tuple[str, dict[str, str]]:
+    """Return (fingerprint, manifest) for the watched code."""
+    contents = _collect_bytes(packages, extra_watch)
+    manifest = {rel: _hash_bytes(rel, data) for rel, data in sorted(contents.items())}
+    fp = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
+    return fp, manifest
+
+
+# --------------------------------------------------------------------------- registry
+
+
+class _Lock:
+    """mkdir-based lock: the only ~atomic primitive that behaves on NFS.
+
+    Staleness is judged by *observed* mtime quiescence on the waiter's own
+    monotonic clock (no cross-machine clock comparison), and release is
+    ownership-checked via a token so a stale-break thief's lock is never
+    removed by the previous holder.
+    """
+
+    def __init__(self, dirpath: Path, stale_s: float = 60.0) -> None:
+        self.path = dirpath / ".lock"
+        self.stale_s = stale_s
+        self.token = uuid.uuid4().hex
+
+    def __enter__(self):
+        observed: tuple[float, float] | None = None  # (mtime, when_first_seen)
+        while True:
+            try:
+                os.mkdir(self.path)
+                (self.path / "owner").write_text(self.token)
+                return self
+            except FileExistsError:
+                try:
+                    mtime = self.path.stat().st_mtime
+                except FileNotFoundError:
+                    continue  # released between mkdir and stat — retry
+                now = time.monotonic()
+                if observed is None or observed[0] != mtime:
+                    observed = (mtime, now)
+                elif now - observed[1] > self.stale_s:
+                    print(f"codever: breaking stale lock {self.path}", file=sys.stderr)
+                    shutil.rmtree(self.path, ignore_errors=True)
+                    observed = None
+                time.sleep(0.1)
+
+    def __exit__(self, *exc):
+        try:
+            if (self.path / "owner").read_text() == self.token:
+                shutil.rmtree(self.path, ignore_errors=True)
+        except OSError:
+            pass  # broken by another process — not ours to remove anymore
+
+
+def _read_registry(reg_file: Path) -> list[dict]:
+    entries = []
+    if reg_file.exists():
+        for line in reg_file.read_text().splitlines():
+            line = line.strip()
+            if line:
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue  # torn write loses one line, never correctness
+    return entries
+
+
+def _git_state() -> tuple[str | None, bool]:
+    try:
+        sha = (
+            subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=5
+            ).stdout.strip()
+            or None
+        )
+        dirty = bool(
+            subprocess.run(
+                ["git", "status", "--porcelain"], capture_output=True, text=True, timeout=5
+            ).stdout.strip()
+        )
+        return sha, dirty
+    except Exception:
+        return None, False
+
+
+def _write_snapshot(snap_dir: Path, contents: dict[str, bytes]) -> None:
+    """Raw source copies from the captured bytes; atomic via tmp + rename."""
+    if snap_dir.exists():
+        return
+    tmp = Path(tempfile.mkdtemp(dir=snap_dir.parent))
+    try:
+        for rel, data in contents.items():
+            dst = tmp / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(data)
+    except OSError as e:
+        shutil.rmtree(tmp, ignore_errors=True)
+        print(
+            f"codever: snapshot {snap_dir.name} skipped ({e}) — the next changelog "
+            "diff will show whole files as added",
+            file=sys.stderr,
+        )
+        return
+    try:
+        os.rename(tmp, snap_dir)
+    except OSError:
+        shutil.rmtree(tmp, ignore_errors=True)  # another process won the race
+
+
+def _read_lines(data: bytes | None) -> list[str] | None:
+    if data is None:
+        return None
+    try:
+        return data.decode().splitlines(keepends=True)
+    except UnicodeDecodeError:
+        return None
+
+
+def _diff_block(prev_snap: Path, contents: dict[str, bytes], changed: list[str]) -> str:
+    out = []
+    for rel in changed:
+        old_path = prev_snap / rel
+        old = _read_lines(old_path.read_bytes()) if old_path.exists() else []
+        new = _read_lines(contents.get(rel))
+        if old is None or new is None:
+            out.append(f"Binary file {rel} changed\n")
+            continue
+        diff = difflib.unified_diff(old, new, fromfile=f"a/{rel}", tofile=f"b/{rel}")
+        out.append("".join(diff))
+    return "\n".join(out)
+
+
+def _annotate(base: Path, text: str) -> None:
+    with open(base / "CHANGELOG.md", "a") as f:
+        f.write(text + "\n\n")
+
+
+# --------------------------------------------------------------------------- public
+
+
+def stamp(
+    infra,
+    packages=(),
+    extra_watch=(),
+    note: str = "",
+    folder: str | os.PathLike | None = None,
+) -> str:
+    """Fingerprint watched code and set infra.version to "0.0.N-<fp8>".
+
+    Call after parsing the config and before any cache access (exca raises if
+    you're too late). No-ops with a drift warning when infra.version was set
+    explicitly (= pinning), and entirely when CODEVER_OFF=1.
+
+    Args:
+        infra: exca TaskInfra/MapInfra (mutated in place).
+        packages: importable package names whose whole source tree to watch.
+        extra_watch: extra glob patterns relative to cwd (configs, plugins).
+        note: changelog annotation for this bump (or CODEVER_NOTE env var).
+        folder: registry location; defaults to <infra.folder>/code_versions.
+
+    Returns:
+        The resolved version string.
+    """
+    if os.environ.get("CODEVER_OFF"):
+        return str(infra.version)
+    note = note or os.environ.get("CODEVER_NOTE", "")
+
+    if folder is None and getattr(infra, "folder", None) is None:
+        print(
+            "codever: infra.folder is None (cacheless run) — skipping versioning; "
+            "pass folder= to keep a registry anyway",
+            file=sys.stderr,
+        )
+        return str(infra.version)
+
+    contents = _collect_bytes(packages, extra_watch)
+    manifest = {rel: _hash_bytes(rel, data) for rel, data in sorted(contents.items())}
+    fp = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
+
+    base = Path(folder) if folder is not None else Path(infra.folder).expanduser() / "code_versions"
+    base.mkdir(parents=True, exist_ok=True)
+
+    if infra.version not in DEFAULT_VERSIONS:
+        return _handle_preset_version(infra, fp, base)
+
+    snaps = base / "snapshots"
+    snaps.mkdir(exist_ok=True)
+
+    with _Lock(base):
+        entries = _read_registry(base / "registry.jsonl")
+        known = {e["fp"]: e for e in entries}
+        if fp in known:
+            version = str(known[fp]["version"])
+            msg = f"codever: {version} (unchanged)"
+            if note:
+                _annotate(base, f"### note on {version} — {_now()}\n> {note}")
+                msg += " — note recorded as annotation"
+            print(msg, file=sys.stderr)
+        else:
+            counter = 1 + max((e.get("counter", 0) for e in entries), default=0)
+            version = f"0.0.{counter}-{fp[:_FP_LEN]}"
+            prev = entries[-1] if entries else None
+
+            _write_snapshot(snaps / fp[:_SNAP_LEN], contents)
+
+            changed = []
+            if prev is not None:
+                old = prev["files"]
+                changed = sorted(k for k in manifest.keys() & old.keys() if manifest[k] != old[k])
+
+            sha, dirty = _git_state()
+            entry = {
+                "fp": fp,
+                "version": version,
+                "counter": counter,
+                "ts": _now(),
+                "git_sha": sha,
+                "git_dirty": dirty,
+                "note": note,
+                "python": list(sys.version_info[:2]),
+                "scope": {"packages": list(packages), "extra_watch": list(extra_watch)},
+                "files": manifest,
+                "changed": changed,
+            }
+            with open(base / "registry.jsonl", "a") as f:
+                f.write(json.dumps(entry) + "\n")
+
+            section = [
+                f"## {version} — {entry['ts']} — git {sha or '?'}{' (dirty)' if dirty else ''}"
+            ]
+            if note:
+                section.append(f"> {note}")
+            if prev is None:
+                section.append(f"Initial version ({len(manifest)} files fingerprinted).")
+            else:
+                for k in sorted(manifest.keys() - prev["files"].keys()):
+                    section.append(f"Added: {k}")
+                for k in sorted(prev["files"].keys() - manifest.keys()):
+                    section.append(f"Removed: {k}")
+                section.append("")
+                section.append("```diff")
+                section.append(_diff_block(snaps / prev["fp"][:_SNAP_LEN], contents, changed))
+                section.append("```")
+            _annotate(base, "\n".join(section))
+
+            prev_v = prev["version"] if prev else "(none)"
+            print(
+                f"codever: {prev_v} -> {version}"
+                + (f" | changed: {', '.join(changed)}" if changed else "")
+                + (f" | note: {note}" if note else "")
+                + f"\ncodever: changelog at {base / 'CHANGELOG.md'}",
+                file=sys.stderr,
+            )
+
+    try:
+        infra.version = version
+    except RuntimeError as e:
+        raise RuntimeError(
+            "codever: stamp() must run before any cache access (infra.uid() or calling "
+            "the cached method) — move codever.stamp(...) right after config parsing"
+        ) from e
+    _own_stamps[id(infra)] = (version, fp)
+    return version
+
+
+def _handle_preset_version(infra, fp: str, base: Path) -> str:
+    """infra.version was already set: our own earlier stamp, a pin, or a hand-bump."""
+    own = _own_stamps.get(id(infra))
+    if own is not None and own[0] == infra.version:
+        if own[1] != fp:
+            raise RuntimeError(
+                f"codever: code changed since this config was stamped ({infra.version}) — "
+                "build a fresh config for the new run instead of reusing this object"
+            )
+        return str(infra.version)  # our stamp, code unchanged — quiet no-op
+
+    if not _VERSION_RE.fullmatch(infra.version):
+        print(
+            f"codever: version pinned to {infra.version!r} (hand-managed); code drift not tracked",
+            file=sys.stderr,
+        )
+        return str(infra.version)
+
+    entries = _read_registry(base / "registry.jsonl")
+    known_versions = {e["version"] for e in entries}
+    if infra.version not in known_versions:
+        hint = next(
+            (e["version"] for e in entries if e["fp"].startswith(infra.version.split("-")[1])),
+            None,
+        )
+        print(
+            f"codever: pinned version {infra.version} not found in registry"
+            + (f" — did you mean {hint}?" if hint else ""),
+            file=sys.stderr,
+        )
+    if not infra.version.endswith(fp[:_FP_LEN]):
+        print(
+            f"codever: PINNED {infra.version} but current code fingerprint is "
+            f"{fp[:_FP_LEN]} — results will come from the pinned version's cache",
+            file=sys.stderr,
+        )
+        if (base / "CHANGELOG.md").exists():
+            _annotate(
+                base,
+                f"### pinned run — {_now()}\n"
+                f"> ran {infra.version} despite live fingerprint {fp[:_FP_LEN]}",
+            )
+    return str(infra.version)
+
+
+def verify(infra, packages=(), extra_watch=()) -> None:
+    """In-job guard: refuse to run under a version minted for different code.
+
+    Call at the top of the @infra.apply-decorated method. Closes the window
+    where code on the shared filesystem is edited while the job waits in the
+    SLURM queue (and where a later revert would otherwise resurrect the
+    poisoned cache entry).
+    """
+    m = _VERSION_RE.fullmatch(str(infra.version))
+    if m is None:
+        return  # hand-managed or unstamped version: nothing to check
+    fp, _ = fingerprint(packages, extra_watch)
+    suffix = infra.version.split("-")[1]
+    if not fp.startswith(suffix):
+        raise RuntimeError(
+            f"codever: job was submitted for code {suffix} but is running against "
+            f"{fp[:_FP_LEN]} — code changed while the job was queued; resubmit"
+        )
+
+
+def _now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

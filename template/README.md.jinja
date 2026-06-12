@@ -170,6 +170,11 @@ uv run python scripts/aggregate_benchmark.py outputs/benchmark_<stamp> --baselin
 # Foundation-model baselines (TabPFN weights: non-commercial research only)
 uv sync --extra tabular-baselines
 uv run python src/{{ package_name }}/benchmark.py estimator=tabpfn
+
+# Optional: cache cells on disk (exca), keyed to estimator config AND code version.
+# Re-running a grid recomputes only missing cells; semantic code edits auto-bump
+# the cache version with a diff changelog (utils/codever.py).
+uv sync --extra caching
 ```
 
 Ship your own models behind the sklearn interface (`src/{{ package_name }}/sklearn_wrapper.py`) — that's how TabPFN/TabICL get adopted, and it makes them drop-ins for this harness and everyone else's.

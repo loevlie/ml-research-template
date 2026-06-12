@@ -1,0 +1,395 @@
+"""codever tests (tabular flavor; needs: uv sync --extra caching)."""
+
+import multiprocessing
+import sys
+import textwrap
+from pathlib import Path
+
+import pytest
+
+pytest.importorskip("exca", reason="needs the caching extra: uv sync --extra caching")
+
+import pydantic
+
+from {{ package_name }}.utils import codever
+
+BASE_SRC = textwrap.dedent(
+    '''
+    """Module docstring."""
+    SCALE = 10
+
+    def compute(x: int) -> int:
+        """Doc."""
+        # a comment
+        return x * SCALE
+    '''
+)
+
+
+@pytest.fixture()
+def pkg(tmp_path, monkeypatch):
+    """A tiny importable package whose source the tests mutate."""
+    import importlib
+
+    # evict any 'watched' from a previous test so find_spec resolves THIS tmp_path
+    for mod in [m for m in sys.modules if m == "watched" or m.startswith("watched.")]:
+        del sys.modules[mod]
+    importlib.invalidate_caches()
+
+    root = tmp_path / "watched"
+    root.mkdir()
+    (root / "__init__.py").write_text("")
+    (root / "core.py").write_text(BASE_SRC)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    return root
+
+
+def fp_of(pkg_name="watched"):
+    fp, _ = codever.fingerprint(packages=[pkg_name])
+    return fp
+
+
+# ---- 1-2. normalization invariance / semantic bumps ----
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda s: s.replace("# a comment", "# a different comment"),
+        lambda s: s.replace("return x * SCALE", "return  x  *  SCALE"),
+        lambda s: s.replace('"""Doc."""', '"""New docstring entirely."""'),
+        lambda s: s.replace('"""Module docstring."""', '"""Other module docstring."""'),
+    ],
+)
+def test_cosmetic_edits_do_not_bump(pkg, edit):
+    before = fp_of()
+    (pkg / "core.py").write_text(edit(BASE_SRC))
+    assert fp_of() == before
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda s: s.replace("SCALE = 10", "SCALE = 11"),
+        lambda s: s.replace("def compute(x: int)", "def compute(x: int = 1)"),
+        lambda s: s.replace("def compute", "import functools\n\n@functools.cache\ndef compute"),
+        lambda s: s.replace("x * SCALE", "y * SCALE").replace("compute(x", "compute(y"),
+    ],
+)
+def test_semantic_edits_bump(pkg, edit):
+    before = fp_of()
+    (pkg / "core.py").write_text(edit(BASE_SRC))
+    assert fp_of() != before
+
+
+# ---- 3. syntax-error fallback ----
+
+
+def test_syntax_error_falls_back_to_raw_bytes(pkg):
+    before = fp_of()
+    (pkg / "core.py").write_text("def broken(:\n    pass\n")
+    broken1 = fp_of()
+    assert broken1 != before
+    (pkg / "core.py").write_text("def broken(:\n    pass  # changed\n")
+    assert fp_of() != broken1  # raw-bytes mode: even comments bump (sound fallback)
+
+
+# ---- 4. determinism ----
+
+
+def test_fingerprint_deterministic(pkg):
+    assert fp_of() == fp_of()
+
+
+# ---- helpers for registry/exca tests ----
+
+
+def make_infra(tmp_path, cluster=None):
+    from exca import TaskInfra
+
+    return TaskInfra(folder=str(tmp_path / "cache"), cluster=cluster)
+
+
+# ---- 5. counter increments / verbatim reuse ----
+
+
+def test_registry_counter_and_verbatim_reuse(pkg, tmp_path):
+    infra = make_infra(tmp_path)
+    v1 = codever.stamp(infra, packages=["watched"])
+    assert v1.startswith("0.0.1-") and len(v1.split("-")[1]) == 8
+
+    infra2 = make_infra(tmp_path)
+    assert codever.stamp(infra2, packages=["watched"]) == v1  # same code, verbatim
+
+    (pkg / "core.py").write_text(BASE_SRC.replace("SCALE = 10", "SCALE = 99"))
+    infra3 = make_infra(tmp_path)
+    v2 = codever.stamp(infra3, packages=["watched"])
+    assert v2.startswith("0.0.2-") and v2 != v1
+
+    (pkg / "core.py").write_text(BASE_SRC)  # revert -> old version string returns
+    infra4 = make_infra(tmp_path)
+    assert codever.stamp(infra4, packages=["watched"]) == v1
+
+
+# ---- 6. registry loss => false bump, never stale ----
+
+
+def test_registry_loss_never_stale(pkg, tmp_path):
+    infra = make_infra(tmp_path)
+    v1 = codever.stamp(infra, packages=["watched"])
+    (pkg / "core.py").write_text(BASE_SRC.replace("SCALE = 10", "SCALE = 99"))
+    v2 = codever.stamp(make_infra(tmp_path), packages=["watched"])
+
+    (tmp_path / "cache" / "code_versions" / "registry.jsonl").unlink()
+    v3 = codever.stamp(make_infra(tmp_path), packages=["watched"])
+    assert v3 != v2  # counter restarted -> different string -> recompute (false bump)
+    assert v3.split("-")[1] == v2.split("-")[1]  # same code, same fp suffix
+    assert v3.split("-")[1] != v1.split("-")[1]  # cannot collide with v1's cache
+
+
+# ---- 7. concurrent stamps ----
+
+
+def _stamp_worker(args):
+    tmp, pkg_parent = args
+    sys.path.insert(0, pkg_parent)
+    from exca import TaskInfra
+
+    from {{ package_name }}.utils import codever as cv
+
+    infra = TaskInfra(folder=str(Path(tmp) / "cache"))
+    return cv.stamp(infra, packages=["watched"], folder=Path(tmp) / "cache" / "code_versions")
+
+
+def test_concurrent_stamp(pkg, tmp_path):
+    sys.modules.pop("watched", None)
+    with multiprocessing.get_context("spawn").Pool(2) as pool:
+        versions = pool.map(_stamp_worker, [(str(tmp_path), str(tmp_path))] * 2)
+    fps = {v.split("-")[1] for v in versions}
+    assert len(fps) == 1  # identical code -> identical fp in both, regardless of counter race
+    reg = (tmp_path / "cache" / "code_versions" / "registry.jsonl").read_text().splitlines()
+    assert 1 <= len(reg) <= 2  # duplicate cosmetic entry at worst
+
+
+# ---- 8. changelog ----
+
+
+def test_changelog_lists_semantic_changes_only(pkg, tmp_path):
+    (pkg / "other.py").write_text("X = 1\n")
+    codever.stamp(make_infra(tmp_path), packages=["watched"])
+    # comment-only edit in other.py, semantic edit in core.py
+    (pkg / "other.py").write_text("X = 1  # tweak\n")
+    (pkg / "core.py").write_text(BASE_SRC.replace("SCALE = 10", "SCALE = 42"))
+    codever.stamp(make_infra(tmp_path), packages=["watched"], note="the answer")
+
+    log = (tmp_path / "cache" / "code_versions" / "CHANGELOG.md").read_text()
+    assert "the answer" in log
+    assert "-SCALE = 10" in log and "+SCALE = 42" in log  # real unified diff
+    assert log.count("watched/other.py") == 0  # comment-only file excluded
+
+
+def test_comment_only_edit_writes_nothing(pkg, tmp_path):
+    v1 = codever.stamp(make_infra(tmp_path), packages=["watched"])
+    before = (tmp_path / "cache" / "code_versions" / "CHANGELOG.md").read_text()
+    (pkg / "core.py").write_text(BASE_SRC.replace("# a comment", "# still a comment"))
+    assert codever.stamp(make_infra(tmp_path), packages=["watched"]) == v1
+    assert (tmp_path / "cache" / "code_versions" / "CHANGELOG.md").read_text() == before
+
+
+# ---- 9. the real thing: exca integration ----
+
+
+def test_exca_cache_busts_on_code_change_only(pkg, tmp_path):
+    import importlib
+
+    calls = {"n": 0}
+
+    class Task(pydantic.BaseModel):
+        x: int = 3
+        infra: "object" = None
+        model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
+    # build the exca task fresh per stamp (mirrors one launcher invocation)
+    def run_once():
+        from exca import TaskInfra
+
+        class T(pydantic.BaseModel):
+            x: int = 3
+            infra: TaskInfra = TaskInfra(folder=str(tmp_path / "cache"))
+
+            @infra.apply
+            def run(self) -> int:
+                calls["n"] += 1
+                import watched.core
+
+                importlib.reload(watched.core)
+                return watched.core.compute(self.x)
+
+        t = T()
+        codever.stamp(t.infra, packages=["watched"])
+        return t.run()
+
+    def write(text: str) -> None:
+        # bump mtime past .pyc validation granularity so importlib.reload
+        # re-executes the edited source (same-size same-second writes get
+        # served stale bytecode — a test artifact, not a codever concern)
+        import os
+
+        (pkg / "core.py").write_text(text)
+        st = (pkg / "core.py").stat()
+        os.utime(pkg / "core.py", (st.st_atime, st.st_mtime + 2))
+
+    assert run_once() == 30 and calls["n"] == 1
+    assert run_once() == 30 and calls["n"] == 1  # unchanged code -> cache hit
+
+    write(BASE_SRC.replace("# a comment", "# reworded"))
+    assert run_once() == 30 and calls["n"] == 1  # cosmetic edit -> still a hit
+
+    write(BASE_SRC.replace("SCALE = 10", "SCALE = 200"))
+    assert run_once() == 600 and calls["n"] == 2  # semantic edit -> recompute, fresh result
+
+    write(BASE_SRC)
+    assert run_once() == 30 and calls["n"] == 2  # revert -> old cache resurrects
+
+
+# ---- 10. pin + off ----
+
+
+def test_pin_is_a_noop_with_drift_warning(pkg, tmp_path, capsys):
+    infra = make_infra(tmp_path)
+    infra.version = "0.0.1-deadbeef"
+    assert codever.stamp(infra, packages=["watched"]) == "0.0.1-deadbeef"
+    assert "PINNED" in capsys.readouterr().err
+    assert not (tmp_path / "cache" / "code_versions" / "registry.jsonl").exists()
+
+
+def test_codever_off_env(pkg, tmp_path, monkeypatch):
+    monkeypatch.setenv("CODEVER_OFF", "1")
+    infra = make_infra(tmp_path)
+    assert codever.stamp(infra, packages=["watched"]) == "0"
+    assert infra.version == "0"
+
+
+# ---- 12. path-safety round-trip is covered by test_exca_cache_busts_* writing real cache dirs
+
+
+# ---- review regressions: stale-hit class ----
+
+
+def test_symlinked_dir_is_fingerprinted(pkg, tmp_path):
+    shared = tmp_path / "shared_lib"
+    shared.mkdir()
+    (shared / "engine.py").write_text("def factor():\n    return 10\n")
+    (pkg / "sub").symlink_to(shared)
+
+    fp1, manifest = codever.fingerprint(packages=["watched"])
+    assert "watched/sub/engine.py" in manifest
+    (shared / "engine.py").write_text("def factor():\n    return 1000\n")
+    assert codever.fingerprint(packages=["watched"])[0] != fp1
+
+
+def test_symlink_cycle_terminates(pkg):
+    (pkg / "loop").symlink_to(pkg)  # package contains a symlink to itself
+    _fp, manifest = codever.fingerprint(packages=["watched"])  # must not hang
+    assert "watched/core.py" in manifest
+
+
+def test_namespace_package_all_locations(tmp_path, monkeypatch):
+    for site, mod in [("site1", "a"), ("site2", "b")]:
+        d = tmp_path / site / "nsp"
+        d.mkdir(parents=True)
+        (d / f"{mod}.py").write_text(f"{mod.upper()} = 1\n")
+    monkeypatch.syspath_prepend(str(tmp_path / "site1"))
+    monkeypatch.syspath_prepend(str(tmp_path / "site2"))
+    monkeypatch.chdir(tmp_path)
+
+    fp1, manifest = codever.fingerprint(packages=["nsp"])
+    assert {"nsp/a.py", "nsp/b.py"} <= set(manifest)
+    (tmp_path / "site1" / "nsp" / "a.py").write_text("A = 999\n")
+    assert codever.fingerprint(packages=["nsp"])[0] != fp1
+
+
+def test_restamp_same_object_after_edit_raises(pkg, tmp_path):
+    infra = make_infra(tmp_path)
+    v = codever.stamp(infra, packages=["watched"])
+    assert codever.stamp(infra, packages=["watched"]) == v  # unchanged: quiet no-op
+    (pkg / "core.py").write_text(BASE_SRC.replace("SCALE = 10", "SCALE = 77"))
+    with pytest.raises(RuntimeError, match="fresh config"):
+        codever.stamp(infra, packages=["watched"])
+
+
+def test_verify_guards_edit_after_submit(pkg, tmp_path):
+    infra = make_infra(tmp_path)
+    codever.stamp(infra, packages=["watched"])
+    codever.verify(infra, packages=["watched"])  # unchanged: passes
+    (pkg / "core.py").write_text(BASE_SRC.replace("SCALE = 10", "SCALE = 555"))
+    with pytest.raises(RuntimeError, match="code changed while the job was queued"):
+        codever.verify(infra, packages=["watched"])
+
+
+# ---- review regressions: crash class ----
+
+
+def test_dangling_symlink_does_not_crash(pkg):
+    (pkg / ".#core.py").symlink_to(pkg / "nonexistent_target.py")  # emacs lockfile style
+    _fp, manifest = codever.fingerprint(packages=["watched"])
+    assert "watched/.#core.py" not in manifest
+
+
+def test_folder_none_is_graceful(pkg, capsys):
+    from exca import TaskInfra
+
+    infra = TaskInfra(folder=None)
+    assert codever.stamp(infra, packages=["watched"]) == "0"
+    assert "cacheless" in capsys.readouterr().err
+
+
+def test_binary_extra_watch_diff_marker(pkg, tmp_path):
+    (Path.cwd() / "data.bin").write_bytes(b"\x00\x01\xff")
+    codever.stamp(make_infra(tmp_path), packages=["watched"], extra_watch=["data.bin"])
+    (Path.cwd() / "data.bin").write_bytes(b"\x00\x02\xfe")
+    codever.stamp(make_infra(tmp_path), packages=["watched"], extra_watch=["data.bin"])
+    log = (tmp_path / "cache" / "code_versions" / "CHANGELOG.md").read_text()
+    assert "Binary file extra/data.bin changed" in log
+
+
+def test_extra_watch_escape_rejected(pkg, tmp_path):
+    outside = tmp_path.parent / f"outside-{tmp_path.name}.txt"
+    outside.write_text("x")
+    (Path.cwd() / "link.txt").symlink_to(outside)
+    with pytest.raises(ValueError, match="escapes cwd"):
+        codever.fingerprint(packages=["watched"], extra_watch=["link.txt"])
+
+
+# ---- review regressions: UX / annotation class ----
+
+
+def test_note_on_unchanged_run_is_annotated(pkg, tmp_path):
+    codever.stamp(make_infra(tmp_path), packages=["watched"])
+    codever.stamp(make_infra(tmp_path), packages=["watched"], note="forgot to say why")
+    log = (tmp_path / "cache" / "code_versions" / "CHANGELOG.md").read_text()
+    assert "### note on" in log and "forgot to say why" in log
+
+
+def test_hand_bump_pin_is_quiet(pkg, tmp_path, capsys):
+    infra = make_infra(tmp_path)
+    infra.version = "5"
+    assert codever.stamp(infra, packages=["watched"]) == "5"
+    err = capsys.readouterr().err
+    assert "hand-managed" in err and "PINNED" not in err
+
+
+def test_unknown_pin_warns_with_hint(pkg, tmp_path, capsys):
+    v1 = codever.stamp(make_infra(tmp_path), packages=["watched"])
+    suffix = v1.split("-")[1]
+    infra = make_infra(tmp_path)
+    infra.version = f"0.0.9-{suffix}"  # right code, wrong counter (typo'd pin)
+    codever.stamp(infra, packages=["watched"])
+    err = capsys.readouterr().err
+    assert "not found in registry" in err and v1 in err
+
+
+def test_extra_watch_zero_match_warns(pkg, tmp_path, capsys):
+    codever.fingerprint(packages=["watched"], extra_watch=["configs/**/*.yaml"])
+    assert "matched no files" in capsys.readouterr().err

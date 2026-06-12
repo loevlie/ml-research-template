@@ -97,6 +97,11 @@ tabular-baselines = [
     "tabpfn>=2.0.0",
     "tabicl>=0.1.0",
 ]
+caching = [
+    # Benchmark-cell result caching (exca) with code-aware auto-versioning
+    # (utils/codever.py): re-running a grid recomputes only missing cells.
+    "exca>=0.5.26",
+]
 {%- endif %}
 cluster = [
     # SLURM submission via Hydra multirun: `train.py -m launcher=slurm ...`

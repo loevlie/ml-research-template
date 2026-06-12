@@ -23,6 +23,7 @@ logs/
 wandb/
 lightning_logs/
 multirun/
+cache/
 .aim/
 
 # Data (too large for git -- use DVC or symlinks)

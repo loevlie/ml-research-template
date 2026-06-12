@@ -71,6 +71,28 @@ Mean ranks, win rates, and the paired Wilcoxon across datasets are the standard 
 
 `sklearn_wrapper.py` shows the pattern: your torch model behind `BaseEstimator` (`fit/predict/predict_proba`, params stored verbatim, fitted state in `*_` attributes). That makes it a drop-in for this harness, sklearn CV, and **everyone else's eval code** — it's how TabPFN and TabICL got adopted. The flavor's tests include the sklearn-clone contract and a hypothesis-based row-permutation-invariance property test (the kind of invariant in-context tabular models must satisfy).
 
+## Cached cells (optional)
+
+```bash
+uv sync --extra caching   # exca + code-aware versioning
+```
+
+With the `caching` extra, each cell's result is memoized on disk by [exca](https://github.com/facebookresearch/exca), keyed on (estimator config, task, fold, seed, **code version**). Re-running a grid recomputes only missing cells — a partial SLURM-array failure costs one rerun, not the whole grid.
+
+The code-version key comes from `utils/codever.py`: it fingerprints the AST-normalized source of your package at submit time (comments/formatting/docstring edits never invalidate; semantic edits do) and auto-bumps `0.0.N-<hash>`, appending a unified diff of what changed to `cache/benchmark/code_versions/CHANGELOG.md`:
+
+```
+## 0.0.2-bdc33bb5 — 2026-06-11 — git 8c3c5d1 (dirty)
+> switched to balanced sampling
+-def train_step(model, batch, lr=3e-4):
++def train_step(model, batch, lr=1e-3, accumulate=2):
+```
+
+Months later, any cached number traces to the exact code diff that produced it. Reverting code (e.g. `git checkout` of last month's commit) reproduces the old fingerprint and **resurrects the old cache** — no pinning needed. Annotate bumps with `CODEVER_NOTE="why"`; disable with `cache.enabled=false` or by skipping the extra (the harness falls back to uncached automatically).
+
+!!! warning "What the fingerprint does NOT see"
+    Dependency upgrades, data files, and notebook code don't bump the version — documented out of scope. After a `torch`/`sklearn` upgrade, force-recompute critical cells once (`--infra.mode=force` semantics live on for exactly this).
+
 ## Foundation-model baselines
 
 ```bash
