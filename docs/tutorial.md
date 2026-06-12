@@ -179,6 +179,10 @@ you have a baseline to beat, run it with the *same seeds* and pass
 
 ## Where to go from here
 
+Keep this project — the [hands-on tour](tour.md) continues it through
+sweeps, Optuna, crash recovery, tracker swapping, and a real paired
+significance test (~20 more minutes). Or jump to a topic:
+
 <div class="grid cards" markdown>
 
 -   :material-tune-variant:{ .middle } **Find better hyperparameters** —

@@ -18,6 +18,8 @@
   &nbsp;•&nbsp;
   <a href="https://loevlie.github.io/ml-research-template/tutorial/">15-minute tutorial</a>
   &nbsp;•&nbsp;
+  <a href="https://loevlie.github.io/ml-research-template/tour/">Hands-on tour</a>
+  &nbsp;•&nbsp;
   <a href="https://loevlie.github.io/ml-research-template/stack/">The stack (and why)</a>
 </p>
 
@@ -54,13 +56,14 @@ Answer ~10 prompts, get a ready-to-train project: git initialized, deps locked, 
 
 - ⚡ **Copier-native.** `copier update` pulls template improvements into existing projects without clobbering your work — the compounding win across multiple projects.
 
-**Full walkthroughs** — configs, sweeps, SLURM, tracking (wandb/trackio), multi-seed stats, tabular benchmarking, multimodal — live in the **[documentation](https://loevlie.github.io/ml-research-template/)**.
+**Learn it by doing it:** the [15-minute tutorial](https://loevlie.github.io/ml-research-template/tutorial/) takes a real dataset to a publication-grade number, and the [hands-on tour](https://loevlie.github.io/ml-research-template/tour/) continues into sweeps, Optuna, crash recovery, and a paired significance test — every output on those pages is from a real run. The [docs](https://loevlie.github.io/ml-research-template/) also pack a one-page [cheatsheet](https://loevlie.github.io/ml-research-template/cheatsheet/), per-workflow guides with diagrams, and interactive widgets (a live bootstrap-CI demo, a CLI command builder, a what-gets-generated explorer).
 
 ## Why you might NOT want this
 
 - You want a Lightning `Trainer` black box → use [lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template).
-- You work in JAX/TF → not for you.
+- You work in TensorFlow → not for you (PyTorch and JAX are).
 - You don't want to own the CLI code (one ~250-line file you can read) → use a framework instead.
+- You need multi-node pretraining scaffolding → crib [torchtitan](https://github.com/pytorch/torchtitan).
 
 ## Updating an existing project
 
