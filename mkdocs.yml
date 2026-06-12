@@ -54,6 +54,7 @@ extra_css:
 
 plugins:
   - search
+  - termynal
   - social:
       enabled: !ENV [CI, false]
 

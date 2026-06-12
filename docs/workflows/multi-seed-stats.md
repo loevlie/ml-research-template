@@ -1,6 +1,15 @@
 # Multi-seed statistics
 
-Single-seed deltas are noise until proven otherwise. The template makes the honest version — N seeds, paired tests, effect sizes — a two-command workflow.
+Single-seed deltas are noise until proven otherwise. The template makes the honest version — N seeds, paired tests, effect sizes — a two-command workflow:
+
+```mermaid
+flowchart LR
+    A["run_seeds.sh<br><i>ours, seeds 42…1337</i>"] --> M1["seed_42/metrics.json<br>seed_123/ · seed_456/ · …"]
+    B["run_seeds.sh<br><i>baseline, same seeds</i>"] --> M2["seed_42/ · seed_123/ · …"]
+    M1 --> AG["aggregate_seeds.py"]
+    M2 -->|--baseline| AG
+    AG --> R["mean ± std · 95% bootstrap CI<br>paired Wilcoxon · Cohen's d"]
+```
 
 ## 1. Run the seeds
 

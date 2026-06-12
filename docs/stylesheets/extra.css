@@ -114,6 +114,23 @@
   border-radius: 0.4rem;
 }
 
+/* ---- Check/cross lists ---------------------------------------------------- */
+
+.md-typeset .check {
+  color: #4caf50;
+}
+
+.md-typeset .cross {
+  color: #ef5350;
+}
+
+/* ---- Termynal ------------------------------------------------------------- */
+
+[data-termynal] {
+  border-radius: 0.5rem;
+  box-shadow: var(--md-shadow-z2);
+}
+
 /* ---- Mermaid diagrams ---------------------------------------------------- */
 
 .md-typeset .mermaid {

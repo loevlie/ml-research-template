@@ -1,6 +1,32 @@
 # The stack (and why)
 
-Every tool here was re-evaluated against the 2026 landscape. The table is the summary; the sections below are the reasoning, including the bets we're deliberately *not* taking.
+Every tool re-evaluated against the 2026 landscape. One picture first: the
+parts you own sit behind two factory seams, everything else is shared
+plumbing the template maintains for you.
+
+```mermaid
+flowchart TB
+    subgraph own ["you own (never overwritten by copier update)"]
+        direction LR
+        DM["datamodule.py"]
+        MM["models/module.py"]
+        OB["objectives.py"]
+        CF["configs.py + experiments.py"]
+    end
+    subgraph tpl ["template-owned (improves with copier update)"]
+        direction LR
+        TR["train.py / eval.py"]
+        LP["training_loop.py"]
+        CLI["utils/cli.py<br><i>Hydra-style CLI on tyro</i>"]
+        OR["sweep.py · tune.py · run_seeds<br><i>submitit · optuna · stats</i>"]
+    end
+    CF --> CLI --> TR
+    DM --> TR
+    MM --> TR
+    OB --> LP
+    TR --> LP
+    TR --> OR
+```
 
 | Concern | Choice | One-line why |
 |---|---|---|
@@ -15,53 +41,68 @@ Every tool here was re-evaluated against the 2026 landscape. The table is the su
 | Lint/format | **ruff** | One fast tool replaces black + isort + flake8 |
 | Stats | **scipy** (+ pingouin extra) | Paired Wilcoxon, bootstrap CIs, Cohen's d out of the box |
 
-## uv
-
-uv is the default Python toolchain in 2026 — installs are 10–100× faster than pip, the lockfile makes every project reproducible, and `[tool.uv.sources]` routes PyTorch to the right CUDA wheel index per platform (the `cuda_version` prompt writes this for you). PyTorch's experimental *wheel variants* will eventually auto-detect accelerators and make even that config unnecessary; until it stabilizes, the index routing stays.
-
 ## Typed configs — and why we left Hydra
 
-This template originally ran on Hydra and kept it deliberately for a while: its config groups, multirun, and submitit launcher were a uniquely integrated workflow. But Hydra's last feature release was early 2023, its plugin ecosystem is frozen, and the field moved to typed dataclass/pydantic configs (torchtitan, LeRobot, nerfstudio, Levanter). We migrated to **pydantic schemas + [tyro](https://github.com/brentyi/tyro)** — and kept the two things Hydra still did best:
+This template ran on Hydra until mid-2026. Hydra's last feature release was
+early 2023 and its plugin ecosystem froze, while the field moved to typed
+configs (torchtitan, LeRobot, nerfstudio). We migrated to **pydantic +
+[tyro](https://github.com/brentyi/tyro)** and kept the two things Hydra did
+best:
 
-- **Free-order `key=value` CLI with group swaps** — `utils/cli.py` (~150 lines) accepts the exact Hydra syntax (`experiment=example loss=contrastive model.lr=1e-3`) on top of tyro, so muscle memory and scripts survived the migration. Underneath, every override is type-checked: typos die at parse time with a suggestion.
-- **`${...}` interpolation** — replaced by the derived-field pattern (`None`-defaults resolved in one visible `resolved()` method) in code, with literal `${a.b}` references still supported inside YAML override files.
+- the free-order `key=value` CLI with group swaps — `experiment=example loss=contrastive model.lr=1e-3` still works verbatim, now typo-checked at parse time
+- `${...}` interpolation — replaced by one visible `resolved()` method in code, still supported inside `configs/local.yaml`
 
-What Hydra's orchestration did is now ~150 lines of owned, readable glue: `scripts/sweep.py` (itertools × submitit job arrays), `scripts/tune.py` (Optuna + JournalFileBackend on the shared filesystem), and `utils/run_dir.py` (timestamped dirs + resolved-config snapshots with git state). New dependencies — tyro, submitit, optuna — are all actively maintained; nothing in the config/orchestration path is frozen anymore.
+What Hydra's launcher/sweeper plugins did is now ~150 lines of owned glue
+(`sweep.py`, `tune.py`, `run_dir.py`) on actively maintained deps.
 
 ## Lightning Fabric, not Trainer
 
-Research code in 2026 is mostly hand-written loops with a thin distributed layer (HF Accelerate or Fabric) underneath — frameworks with callback machinery fight you on custom objectives, multi-network updates, and `torch.compile`. Fabric gives device placement, mixed precision (`trainer.precision=bf16-mixed`), DDP, and checkpoint I/O while the loop stays ~75 readable lines in `training_loop.py`, with [resume, LR scheduling, gradient accumulation, and clipping](workflows/resume-checkpointing.md) config-driven.
-
-The `Objective` protocol (`objectives.py`) keeps the loop loss-agnostic: an objective is any callable `(model, batch) -> {"loss": ...}`, so supervised / contrastive / masked-prediction swap via `loss=<name>` without touching the loop.
+Research code in 2026 is hand-written loops with a thin distributed layer
+underneath — callback frameworks fight you on custom objectives and
+`torch.compile`. Fabric does device placement, mixed precision, DDP, and
+checkpoint I/O; the loop stays ~75 readable lines, with resume, LR
+scheduling, accumulation, and clipping config-driven. The `Objective`
+protocol keeps the loop loss-agnostic: any callable
+`(model, batch) -> {"loss": ...}` plugs in via `loss=<name>`.
 
 ## PyTorch by default, JAX by choice
 
-PyTorch is the default because the ecosystems this template serves are
-PyTorch-shaped: tabular foundation models (TabPFN, TabICL), vision/text
-backbones (timm, open_clip, transformers), and the sklearn-adoption path all
-assume torch artifacts. But the orchestration layer — configs, CLI, sweeps,
-Optuna, SLURM, stats — never imports a framework, so `framework=jax` swaps
-just the training core: flax NNX model, optax optimizer (the LR schedule,
-clipping, and accumulation become optimizer composition instead of loop
-code), jitted steps, msgpack checkpoints. Worth choosing when the work is
-small-model/many-step, TPU-bound, or `vmap`-shaped (seed/ensemble
-parallelism); details in [JAX](workflows/jax.md).
+The ecosystems this template serves are PyTorch-shaped — TabPFN/TabICL,
+timm, open_clip, and the sklearn-adoption path all assume torch artifacts.
+But nothing in the orchestration layer imports a framework, so
+`framework=jax` swaps just the training core: flax NNX model, optax
+optimizer (schedule/clipping/accumulation become optimizer composition),
+jitted steps. Choose it for small-model/many-step work, TPUs, or
+`vmap`-shaped research — details in [JAX](workflows/jax.md).
 
 ## exca + codever (tabular flavor)
 
-Benchmark cells are memoized on disk by [exca](https://github.com/facebookresearch/exca) (Meta FAIR, by the submitit author), keyed on the typed estimator config, task, fold, seed — **and the code version**. `utils/codever.py` fingerprints the package's AST-normalized source at submit time, auto-bumps `0.0.N-<hash>` on semantic edits, and appends a diff changelog. Re-running a grid recomputes only missing or code-changed cells; reverting code resurrects the old cache. Details in [Tabular benchmarking](workflows/tabular-benchmarking.md).
+Benchmark cells are memoized on disk by
+[exca](https://github.com/facebookresearch/exca), keyed on the estimator
+config, task, fold, seed — **and the code version**. `utils/codever.py`
+fingerprints your package's AST at submit time, auto-bumps `0.0.N-<hash>` on
+semantic edits, and appends a diff changelog: any cached number traces to
+the exact code that produced it, and reverting code resurrects the old
+cache. Details in [Tabular benchmarking](workflows/tabular-benchmarking.md).
 
 ## Tracking: wandb + trackio
 
-The 2025–26 tracking landscape moved a lot: Neptune was acquired by OpenAI and shut down (March 2026); W&B was acquired by CoreWeave (2025) but its **free academic tier remains the best UX** for a research lab; HuggingFace launched **trackio**, a local-first, wandb-API-compatible tracker. The template treats trackers as swappable (`logger.kind=wandb|trackio|tensorboard|csv`), so the platform risk of any one vendor stays one config key deep. Details in [Experiment tracking](workflows/tracking.md).
+The landscape moved: Neptune shut down (OpenAI acquisition, March 2026);
+W&B went to CoreWeave but its free academic tier remains the best UX;
+HuggingFace's **trackio** is a local-first, wandb-compatible tracker. The
+template keeps trackers swappable (`logger.kind=...`) so vendor risk stays
+one config key deep — see [Experiment tracking](workflows/tracking.md).
 
 ## jaxtyping + beartype
 
-Shape annotations like `Float[Tensor, "batch features"]` are checked *at runtime* on every call. Despite the name, jaxtyping is framework-agnostic and is the standard answer to silent-broadcasting pain in research code. The dev extras also ship `lovely-tensors` (readable tensor reprs), `torchinfo` (model summaries), and `hypothesis-torch` (property-based tests — e.g. the tabular flavor's row-permutation-invariance test).
+`Float[Tensor, "batch features"]` annotations are checked at runtime on
+every call — the standard cure for silent broadcasting bugs (and
+framework-agnostic, despite the name). Dev extras add `lovely-tensors`,
+`torchinfo`, and `hypothesis-torch` for property-based tests.
 
 ## What we deliberately skip
 
-- **Lightning Trainer / Composer / HF Trainer** — wrong altitude for novel-method research.
-- **DVC** — for tabular work, OpenML task IDs *are* the data versioning; for big blobs, HF Hub (Xet) is the pragmatic store.
-- **Multi-node DDP scaffolding** — out of scope; crib torchtitan when you actually need it.
-- **SkyPilot / snakemake** — watch list: SkyPilot ≥0.12 speaks native SLURM (cloud bursting, still preview-grade), snakemake's SLURM executor suits cached benchmark DAGs. Adopt per-project if needed.
+- **Lightning Trainer / Composer / HF Trainer** — wrong altitude for novel-method research
+- **DVC** — OpenML task IDs *are* the data versioning for tabular work; HF Hub for big blobs
+- **Multi-node DDP scaffolding** — crib [torchtitan](https://github.com/pytorch/torchtitan) when you need it
+- **SkyPilot / snakemake** — watch list; adopt per-project if a need appears

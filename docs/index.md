@@ -18,12 +18,22 @@ with multi-seed significance testing and `copier update` baked in.
 
 </div>
 
-```bash
-uv tool install copier
-copier copy --trust gh:loevlie/ml-research-template my-project
+<!-- termynal -->
+
+```
+$ uv tool install copier
+$ copier copy --trust gh:loevlie/ml-research-template my-project
+🎤 project_name? Wine Quality
+🎤 framework? pytorch
+🎤 logger? wandb
+---> 100%
+"Wine Quality" is ready at my-project
+$ cd my-project
+$ uv run python src/wine_quality/train.py
+Epoch   0 | train_loss=2.3055 | val_loss=2.2940 | val_acc=0.0850
 ```
 
-Answer ~10 prompts. Thirty seconds later you have a ready-to-train project: git initialized, dependencies locked, pre-commit installed, and a training run one command away.
+Ten prompts, thirty seconds: git initialized, dependencies locked, pre-commit installed, training.
 
 ## What you get
 
@@ -92,6 +102,26 @@ Answer ~10 prompts. Thirty seconds later you have a ready-to-train project: git 
 
 </div>
 
-## Who this is for
+## Is it for you?
 
-Researchers who value **control, rigor, and reproducibility** over framework magic — and who start more than one project. If you want a callback-driven `Trainer`, use [lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template) instead; if you work in JAX/TF, this isn't for you.
+<div class="grid" markdown>
+
+<div markdown>
+**Use it if you…**
+
+- :material-check:{ .check } start more than one project — `copier update` compounds
+- :material-check:{ .check } want every paper number backed by seeds + significance tests
+- :material-check:{ .check } edit training loops weekly and want to *read* yours
+- :material-check:{ .check } run on a SLURM cluster (or will soon)
+</div>
+
+<div markdown>
+**Skip it if you…**
+
+- :material-close:{ .cross } want a callback-driven `Trainer` — use [lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template)
+- :material-close:{ .cross } work in TensorFlow
+- :material-close:{ .cross } won't own ~150 lines of config/CLI plumbing
+- :material-close:{ .cross } need multi-node pretraining scaffolding — crib [torchtitan](https://github.com/pytorch/torchtitan)
+</div>
+
+</div>

@@ -14,6 +14,18 @@ src/<pkg>/models/module.py    # YOUR model, behind build_model(cfg)
 
 `train.py` builds everything from the config and calls the loop; the loop never parses config, so it's testable with plain arguments. Your data and model live behind two factory functions — replace their bodies and the entry points never need editing (the [tutorial](../tutorial.md) shows this with a real dataset). Read those files once — they're short by design.
 
+One batch through the loop:
+
+```mermaid
+flowchart LR
+    L["train_loader"] -->|batch| O["objective(model, batch)"]
+    O -->|"{'loss': ...}"| B["backward<br><i>÷ accumulation</i>"]
+    B --> C["clip grads"] --> S["optimizer.step()"] --> LR["scheduler.step()"]
+    O -.->|"logits + targets<br>(if emitted)"| A["val accuracy"]
+```
+
+The loop only ever sees the `"loss"` key — that's why swapping objectives never touches it.
+
 ## Run things
 
 ```bash

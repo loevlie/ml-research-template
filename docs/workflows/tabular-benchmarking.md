@@ -2,7 +2,18 @@
 
 *Requires the `tabular` flavor.*
 
-Tabular foundation-model research has an unusual shape: evaluation is **hundreds of small fit/predict jobs** (estimator × dataset × fold), not one big training run. The flavor ships that harness end-to-end.
+Tabular foundation-model research has an unusual shape: evaluation is **hundreds of small fit/predict jobs** (estimator × dataset × fold), not one big training run. The flavor ships that harness end-to-end:
+
+```mermaid
+flowchart LR
+    G["estimator × task × fold<br><i>the grid</i>"] --> C{"cached?<br><i>config + code version</i>"}
+    C -->|hit| R["metrics.json"]
+    C -->|miss| F["fit / predict<br><i>one SLURM array task</i>"] --> R
+    R --> A["aggregate_benchmark.py<br><i>mean ranks · win rates · Wilcoxon</i>"]
+    V["code edit?"] -.->|"codever bumps 0.0.N<br>+ writes changelog"| C
+```
+
+A partial array failure costs one rerun, not the grid; a semantic code edit invalidates exactly the cells it should.
 
 ## The pieces
 
