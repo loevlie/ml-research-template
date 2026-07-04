@@ -8,11 +8,12 @@ We'll predict red-wine quality from 11 physicochemical measurements
 ([UCI wine quality](https://archive.ics.uci.edu/dataset/186/wine+quality),
 1,599 rows — small enough to train on a laptop CPU in seconds).
 
-!!! tip "Prefer reading diffs?"
-    This tutorial also exists as a real repo, one commit per step:
-    [loevlie/wine-quality-example](https://github.com/loevlie/wine-quality-example).
-    Clone it to poke at the finished project, or read the step-2 diff to see
-    the whole "bring your own data" change at once.
+!!! tip "Two other ways to take this tutorial"
+    **[Interactive walkthrough](https://loevlie.github.io/wine-quality-example/)** —
+    a scrollable code tour where each step lights up the exact lines doing the
+    work. **[The repo](https://github.com/loevlie/wine-quality-example)** — the
+    finished project, one commit per step; the step-2 diff is the whole
+    "bring your own data" change at once.
 
 ## 1 · Generate and smoke-test
 
