@@ -66,7 +66,7 @@ Epoch   0 | train_loss=2.3055 | val_loss=2.2940 | val_acc=0.0850
 best      val_loss=2.2925 | ckpts outputs/.../best.ckpt
 ```
 
-That trains the reference MLP on synthetic data — a known-good baseline that proves the install, config parsing, loop, and checkpointing on your machine before your own code adds any unknowns. Then:
+That trains the reference MLP on synthetic data — proof the whole pipeline works before you touch anything. Then:
 
 ```bash
 uv run python src/<package_name>/train.py model.lr=1e-3 data.batch_size=128   # CLI overrides

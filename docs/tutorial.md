@@ -24,11 +24,8 @@ cd wine-quality
 uv run python src/wine_quality/train.py trainer.max_epochs=2
 ```
 
-That trains the reference MLP on **synthetic data** — not to test the model,
-but to prove everything around it (install, wheels, config parsing, loop,
-checkpointing) on your machine while there are still zero unknowns. When your
-own data breaks something in the next step, you'll know the bug is in the
-files you changed, not the setup.
+That trains the reference MLP on **synthetic data** — proof the pipeline works
+before you touch anything.
 
 ## 2 · Bring your own data
 
