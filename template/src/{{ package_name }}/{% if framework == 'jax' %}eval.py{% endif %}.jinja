@@ -16,7 +16,6 @@ import yaml
 from {{ package_name }}.configs import DataConfig, EvalConfig, ModelConfig
 from {{ package_name }}.data.datamodule import create_dataloaders
 from {{ package_name }}.models.module import build_model
-from {{ package_name }}.objectives import SupervisedObjective
 from {{ package_name }}.training_loop import load_checkpoint, make_eval_step
 from {{ package_name }}.utils import cli
 from {{ package_name }}.utils.seed import set_seed
@@ -38,6 +37,7 @@ def _default_from_run(argv: list[str]) -> EvalConfig | None:
                 seed=train_cfg.get("seed", 42),
                 data=DataConfig(**train_cfg.get("data", {})),
                 model=ModelConfig(**train_cfg.get("model", {})),
+                loss=train_cfg.get("loss", {}),
             )
     return None
 
@@ -59,8 +59,8 @@ def main() -> None:
     model = build_model(cfg.model, seed=cfg.seed)
     load_checkpoint(Path(cfg.ckpt_path), model)  # model state only
 
-    # --- Evaluate ---
-    eval_step = make_eval_step(SupervisedObjective())
+    # --- Evaluate (same objective the training loop would use) ---
+    eval_step = make_eval_step(cfg.loss.build())
     model.eval()
     total_loss = 0.0
     correct = 0

@@ -1,10 +1,10 @@
-"""Aggregate results across seeds and run significance tests (Rules 26-29).
+"""Aggregate results across seeds and run significance tests.
 
 Usage:
     python scripts/aggregate_seeds.py outputs/multi_seed_20260411_120000
 
-Reads metrics from each seed's CSV logger output and prints summary statistics
-with significance tests if a baseline is provided.
+Reads the metrics.json each training run writes at exit and prints summary
+statistics, with significance tests if a baseline is provided.
 """
 
 import argparse
@@ -19,8 +19,7 @@ from {{ package_name }}.utils.stats import bootstrap_ci, paired_significance_tes
 def load_seed_metrics(results_dir: Path) -> dict[int, dict[str, float]]:
     """Load final metrics from each seed directory.
 
-    Looks for a `metrics.json` file in each seed_* subdirectory.
-    You should save this file at the end of training.
+    Looks for the `metrics.json` train.py writes in each seed_* subdirectory.
     """
     metrics = {}
     for seed_dir in sorted(results_dir.glob("seed_*")):

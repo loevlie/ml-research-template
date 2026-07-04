@@ -12,13 +12,13 @@ import sys
 from pathlib import Path
 
 import lightning as L
-import torch
-import torch.nn as nn
 import yaml
+from torch.utils.data import DataLoader
 
 from {{ package_name }}.configs import DataConfig, EvalConfig, ModelConfig
 from {{ package_name }}.data.datamodule import create_dataloaders
 from {{ package_name }}.models.module import build_model
+from {{ package_name }}.training_loop import validate
 from {{ package_name }}.utils import cli
 from {{ package_name }}.utils.seed import set_seed
 
@@ -39,6 +39,7 @@ def _default_from_run(argv: list[str]) -> EvalConfig | None:
                 seed=train_cfg.get("seed", 42),
                 data=DataConfig(**train_cfg.get("data", {})),
                 model=ModelConfig(**train_cfg.get("model", {})),
+                loss=train_cfg.get("loss", {}),
                 precision=train_cfg.get("trainer", {}).get("precision", "32-true"),
             )
     return None
@@ -65,28 +66,15 @@ def main() -> None:
     # --- Data + Model (the same seams train.py uses) ---
     loaders = create_dataloaders(cfg.data, seed=cfg.seed)
     model = fabric.setup(build_model(cfg.model))
-    val_loader = fabric.setup_dataloaders(loaders.val)
+    val_loader: DataLoader = fabric.setup_dataloaders(loaders.val)  # type: ignore[assignment]
 
     # --- Load checkpoint ---
     state = {"model": model}
     fabric.load(cfg.ckpt_path, state, weights_only=True)
 
-    # --- Evaluate ---
-    model.eval()
-    total_loss = 0.0
-    correct = 0
-    total = 0
-
-    with torch.no_grad():
-        for x, y in val_loader:
-            logits = model(x)
-            loss = nn.functional.cross_entropy(logits, y)
-            total_loss += loss.item()
-            correct += (logits.argmax(dim=1) == y).sum().item()
-            total += y.size(0)
-
-    avg_loss = total_loss / len(val_loader)
-    accuracy = correct / total
+    # --- Evaluate (same objective + validate() the training loop uses) ---
+    objective = cfg.loss.build()
+    avg_loss, accuracy = validate(fabric, model, objective, val_loader, epoch=0)
     fabric.print(f"Eval | loss={avg_loss:.4f} | acc={accuracy:.4f}")
 
 

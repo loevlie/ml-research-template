@@ -1,17 +1,24 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.4
+  # ruff + mypy run from the project venv (`uv run`), so the hook always uses
+  # the exact versions in uv.lock — no drift between pre-commit and `uv run ruff`.
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix]
+        name: ruff
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
       - id: ruff-format
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.10.0
-    hooks:
+        name: ruff-format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
       - id: mypy
-        additional_dependencies: [torch, numpy]
-        args: [--ignore-missing-imports]
+        name: mypy
+        entry: uv run mypy src
+        language: system
+        pass_filenames: false
+        files: \.py$
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0

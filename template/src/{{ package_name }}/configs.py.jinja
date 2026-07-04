@@ -178,6 +178,7 @@ class EvalConfig(pydantic.BaseModel):
     seed: int = 42
     data: DataConfig = DataConfig()
     model: ModelConfig = ModelConfig()
+    loss: LossConfig = SupervisedLossConfig()  # auto-restored from the run's snapshot
 {%- if framework == 'pytorch' %}
     accelerator: str = "auto"
     devices: int | Literal["auto"] = "auto"

@@ -1,6 +1,6 @@
 """Reproducibility utilities.
 
-Rule 19: Every run is reproducible. This module seeds all RNGs and
+Every run is reproducible. This module seeds all RNGs and
 configures PyTorch for deterministic execution.
 """
 

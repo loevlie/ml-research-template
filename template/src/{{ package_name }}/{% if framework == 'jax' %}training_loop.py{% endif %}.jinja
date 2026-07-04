@@ -21,13 +21,15 @@ import jax.numpy as jnp
 import optax
 from flax import nnx, serialization
 
+from {{ package_name }}.objectives import Objective
+
 # A train/eval step is created once per run (the objective is baked in via
 # closure) and jit-compiled on first call.
 TrainStep = Callable[..., tuple[jax.Array, jax.Array]]
 EvalStep = Callable[..., tuple[jax.Array, jax.Array, jax.Array]]
 
 
-def make_train_step(objective: Any) -> TrainStep:
+def make_train_step(objective: Objective) -> TrainStep:
     """Build the jitted training step for one objective.
 
     The step differentiates the objective's loss w.r.t. the model's params
@@ -49,7 +51,7 @@ def make_train_step(objective: Any) -> TrainStep:
     return train_step
 
 
-def make_eval_step(objective: Any) -> EvalStep:
+def make_eval_step(objective: Objective) -> EvalStep:
     """Build the jitted eval step: loss, plus correct-count when the
     objective emits logits/targets (the keys are static per objective,
     so this branch is resolved at trace time)."""

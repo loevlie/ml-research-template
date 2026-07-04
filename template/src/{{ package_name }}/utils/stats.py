@@ -1,6 +1,6 @@
 """Statistical significance testing utilities.
 
-Rule 25-29: No claim without evidence. This module provides helpers for
+No claim without evidence. This module provides helpers for
 paired significance tests and result reporting.
 """
 
@@ -53,7 +53,7 @@ def paired_significance_test(
     if len(ours) != len(base):
         raise ValueError(
             f"Mismatched lengths: ours={len(ours)}, baseline={len(base)}. "
-            "Use the same seeds for paired evaluation (Rule 27)."
+            "Use the same seeds for paired evaluation."
         )
 
     n = len(ours)

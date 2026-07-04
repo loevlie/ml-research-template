@@ -1,6 +1,6 @@
 """Smoke tests for the model and data pipeline.
 
-Rule 14: Can the model overfit a single batch?
+Can the model overfit a single batch?
 These tests verify the basic pipeline works end-to-end.
 """
 
@@ -22,7 +22,7 @@ def test_forward_pass():
 
 
 def test_overfit_single_batch():
-    """Model can memorize a single batch (Rule 14)."""
+    """Model can memorize a single batch."""
     set_seed(42)
     model = ExampleModel(n_features=32, hidden_dim=128, n_classes=10)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
@@ -58,7 +58,7 @@ def test_build_model_seam():
 
 
 def test_loss_at_init():
-    """Loss at initialization matches -log(1/n_classes) (Rule 13)."""
+    """Loss at initialization matches -log(1/n_classes)."""
     set_seed(42)
     n_classes = 10
     model = ExampleModel(n_features=32, hidden_dim=64, n_classes=n_classes)
